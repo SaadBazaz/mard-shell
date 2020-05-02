@@ -1,0 +1,16 @@
+#include <iostream>
+
+
+
+int main (int argc, char** argv){
+	if (argc<2){
+		printf("Use play [name] to play any of the following games!\n");
+		std::vector<char*> arguments;
+		arguments.push_back("ls");
+		std::string path = DEFAULT_PATH;
+		path += "/usr/games";
+		arguments.push_back(&path[0]);
+//		std::cout<<"Path is "<<path<<std::endl;
+		listDirectory(&arguments[0], arguments.size());
+	}
+}
