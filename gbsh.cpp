@@ -92,10 +92,10 @@ void inputLoop(){
 
 	    // checks if Daemon process or not (ampersand '&' in the end)
 	    for (int i = strlen(arguments[arguments.size()-2]) - 1; i>=0; i--){
-			std::cout<<"Checking daemon\n";
-			std::cout<<"i is "<<i<<" \n";
-			std::cout<<"arguments size is "<<arguments.size()<<std::endl;
-			std::cout<<arguments[arguments.size()-2]<<std::endl;
+			//std::cout<<"Checking daemon\n";
+			//std::cout<<"i is "<<i<<" \n";
+			//std::cout<<"arguments size is "<<arguments.size()<<std::endl;
+			//std::cout<<arguments[arguments.size()-2]<<std::endl;
 	    	if (arguments[arguments.size()-2][i] != ' ' && arguments[arguments.size()-2][i] != '\0'){
 	    		if (arguments[arguments.size()-2][i] == '&'){
 	    			std::cout<<"Is daemon\n";
