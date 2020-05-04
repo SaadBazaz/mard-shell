@@ -31,143 +31,76 @@ void* printWorkingDirectory (void* args, int argc);
 void* clearScreen (void* args, int argc);
 void* listDirectory (void* args, int argc);
 void* runGame (void* args, int argc);
-void* memeGenerator (void* args, int argc){
-
-	srand(time(NULL));
-
-    const char** argv = (const char**) args;
-
-    std::vector<std::string>Memes;
-
-    std::string path = "./usr/games/meme-generator/memes";
-
-	int dir_count = 0;
-    struct dirent* dent;
-    DIR* srcdir = opendir(path.c_str());
-
-    if (srcdir == NULL)
-    {
-        perror("opendir");
-        return (void*)-1;
-    }
-
-    while((dent = readdir(srcdir)) != NULL)
-    {
-        struct stat st;
-
-        if(strcmp(dent->d_name, ".") == 0 || strcmp(dent->d_name, "..") == 0)
-            continue;
-
-        if (fstatat(dirfd(srcdir), dent->d_name, &st, 0) < 0)
-        {
-            perror(dent->d_name);
-            continue;
-        }
-
-        Memes.push_back(dent->d_name);
-
-        if (S_ISDIR(st.st_mode)) dir_count++;
-    }
-    closedir(srcdir);
-//    return (void*)dir_count;
-
-
-    FILE * fp;
-     char * line = NULL;
-     size_t len = 0;
-     ssize_t read;
-
-
-    fp = fopen("./usr/games/meme-generator/captions", "r");
-    if (fp == NULL)
-        exit(EXIT_FAILURE);
-
-    std::vector<std::string> content;
-    content.reserve(100);
-    while ((read = getdelim(&line, &len, '%', fp)) != -1) {
-//        printf("Retrieved line of length %zu:\n", read);
-        line[read-1]='\0';
-//        line[read]='\0';
-
-//        printf("%s", line);
-        content.push_back(line);
-    }
-//    printf ("Length of vector is %d", content.size());
-//    for (int i=0; i<content.size(); i++){
-//        printf ("%s\n", content[i].c_str());
-//    }
-
-    printf("%s\n", content[rand()%content.size()].c_str());
-
-
-    fclose(fp);
-    if (line)
-        free(line);
-
-
-
-
-
-
-
-	char * buffer = 0;
-	long length;
-
-	std::string memePath = "./usr/games/meme-generator/memes/" + Memes[rand()%Memes.size()];
-
-	FILE * f = fopen (memePath.c_str(), "rb");
-
-	if (f)
-	{
-	  fseek (f, 0, SEEK_END);
-	  length = ftell (f);
-	  fseek (f, 0, SEEK_SET);
-	  buffer = (char*) malloc (length);
-	  if (buffer)
-	  {
-	    fread (buffer, 1, length, f);
-	  }
-	  fclose (f);
-	}
-
-	printf(R"EOF(
-%s
-)EOF", buffer);
-
-}
+//void* memeGenerator (void* args, int argc);
 //void* systemCall (void* args, int argc);
 
 struct {
   void* (*fn)(void*, int);
   const char* key;
+  const char* man;
 } builtin_function_lookup_table[] =
   {
-  { &changeDirectory,   "cd"},
-  { &hello, "hello" },
+  { &changeDirectory,   "cd", R"EOF(
+
+		This function changes the directory.
+
+	)EOF"},
+  { &hello, "hello", R"EOF(
+
+		This function prints a friendly hello.
+
+	)EOF"},
 //  { &systemCall, "system"},		/*ditched system as a built-in command in favor of a separate exec'd program */
-  { &bashHelp, "help"},
-  { &printWorkingDirectory, "pwd"},
-  { &listDirectory, "ls"},
-  { &runGame, "play"},
-  { &clearScreen, "clear"},
-  { &exitBash, "exit"},
-  { &memeGenerator, "meme-generator"},
+  { &bashHelp, "help", R"EOF(help [pattern ...]
+    Display information about mardaana builtin commands.
+    
+    Displays brief summaries of builtin commands.  If PATTERN is
+    specified, gives detailed help on all commands matching PATTERN,
+    otherwise the list of help topics is printed.
+    
+    Arguments:
+      PATTERN	Pattern specifiying a help topic
+    
+    Exit Status:
+    Returns success unless PATTERN is not found or an invalid option is given.
+)EOF"},
+  { &printWorkingDirectory, "pwd", R"EOF(
+
+		This function prints the current working directory.
+
+	)EOF"},
+  { &listDirectory, "ls", R"EOF(
+
+		This function lists the directories and files within the current directory.
+
+	)EOF"},
+  { &runGame, "play", R"EOF(
+
+		This function executes a game file.
+
+	)EOF"},
+  { &clearScreen, "clear", R"EOF(
+
+		This function clears the screen.
+
+	)EOF"},
+  { &exitBash, "exit", R"EOF(
+
+		This function exits mards.
+
+		)EOF"},
+//  { &memeGenerator, "meme-generator"},
   { NULL,    NULL     }
   };
 
 
 
 bool lookup_and_call( char** arguments, int argument_count ){
-//	printf("in lookup, arguments[0] is '%s'\n", arguments[0]);
-//	printf("in lookup, argument_count is %d\n", argument_count);
-
-
 	for (int i = 0; builtin_function_lookup_table[ i ].fn; i++)
     if (strcmp(builtin_function_lookup_table[ i ].key, arguments[0]) == 0){
       (*(builtin_function_lookup_table[ i ].fn))(arguments, argument_count-1); //-1 because we are excluding the NULL at the end
       return true;
      }
-//	printf("exit lookup\n");
   return false;
 }
 

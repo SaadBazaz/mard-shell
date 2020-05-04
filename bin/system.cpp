@@ -13,7 +13,11 @@ int main(int argc, char ** argv){
         std::string command = newArgs[0];
         path = path + command;
         execv(path.c_str(), newArgs);
-        std::cout<<"System call failed\n"<<endl;
+        path = "/usr/bin/" + command;
+        execv(path.c_str(), newArgs);
+        path = "/usr/local/bin/" + command;
+        execv(path.c_str(), newArgs);
+        std::cout<<"System call failed\n";
     }
     else
         std::cout<<"Could not call: Accepts more than one argument\n";
