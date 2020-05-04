@@ -11,7 +11,7 @@ void sigintHandler(int sig_num)
     fflush(stdout);
 }
 
-
+/* declaring global Env variables for this terminal */
 size_t defaultpathsize = 50;
 char* DEFAULT_PATH  = (char *)malloc(defaultpathsize * sizeof(char));					//default path for terminal commands (Virtual System)
 size_t pathsize = 100;
@@ -22,12 +22,15 @@ char* HOST_NAME = (char *)malloc(hostnamesize * sizeof(char));
 
 struct utsname systemInfo;
 struct passwd * userInfo;
-
+/* end declaration */
 
 
 #include "./include/mrd_fn.h"
 
 
+
+
+/* ================ Assistive Terminal Functions START ================ */
 void setCWD(){
 	size_t currentpathsize = 50;
 	char* CURRENT_PATH = (char *)malloc(pathsize * sizeof(char));
@@ -61,12 +64,10 @@ void setCWD(){
 
 }
 
-
-
-
 void inputLoop(){
 	char * input;
 	size_t inputsize = 100;
+	bool isDaemon = false;
     input = (char *)malloc(inputsize * sizeof(char));
 	do {
 	    Color::Modifier red(Color::FG_RED);
@@ -77,6 +78,8 @@ void inputLoop(){
 
 	    auto characters = getline(&input, &inputsize, stdin);
 	    input[characters-1] = '\0';
+
+
 		std::vector <char *> arguments;
 		arguments.push_back( strtok (input," ") );
 		while (arguments[arguments.size()-1] != NULL) {
@@ -86,6 +89,27 @@ void inputLoop(){
 
 		if (arguments[0] == NULL)
 			continue;
+
+	    // checks if Daemon process or not (ampersand '&' in the end)
+	    for (int i = strlen(arguments[arguments.size()-2]) - 1; i>=0; i--){
+			std::cout<<"Checking daemon\n";
+			std::cout<<"i is "<<i<<" \n";
+			std::cout<<"arguments size is "<<arguments.size()<<std::endl;
+			std::cout<<arguments[arguments.size()-2]<<std::endl;
+	    	if (arguments[arguments.size()-2][i] != ' ' && arguments[arguments.size()-2][i] != '\0'){
+	    		if (arguments[arguments.size()-2][i] == '&'){
+	    			std::cout<<"Is daemon\n";
+	    			isDaemon = true;
+	    			arguments[arguments.size()-2][i] = '\0';
+	    			characters--;
+	    		}
+	    		break;
+	    	}
+	    	else{
+	    		arguments[arguments.size()-2][i] = '\0';
+	    	}
+	    }
+
 
 		//check if a builtin bash command
 		if (lookup_and_call(&arguments[0], arguments.size())){
@@ -115,12 +139,13 @@ void inputLoop(){
 
 		}
 		else{
-			waitpid(childPid,NULL,0);
+			if (!isDaemon)
+				waitpid(childPid,NULL,0);
 		}
 	} while(1);
 }
 
-int main(int argc, char **argv) {
+void initializeTerminal(){
     signal(SIGINT, sigintHandler);
 	clearScreen(NULL, 0);
 	getcwd(DEFAULT_PATH, defaultpathsize);
@@ -161,6 +186,15 @@ int main(int argc, char **argv) {
 
 	printf("The default path is: %s\n\n", DEFAULT_PATH);
 
+}
+/* ================ Assistive Terminal Functions END ================ */
+
+
+
+
+/* driver code */
+int main(int argc, char **argv) {
+	initializeTerminal();
 	inputLoop();
 	return 0;
 }
