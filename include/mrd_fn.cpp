@@ -7,17 +7,20 @@ void* changeDirectory(void* args, int argc){
 		const char ** path = (const char**)args;
 		if (chdir(path[1])<0){
 			printf("%s\n", strerror(errno));
+			return (void*)-1;
 		}
 	}
+	return (void*)0;
 }
 
 void* hello (void* args, int argc){
 	printf("Hello, world!\n");
+	return (void*)0;
 }
 
 void* bashHelp (void* args, int argc){
 	if (argc<2){
-		printf( "Mard bash, version 1.1.0(1)-release (x86_64-pc-linux-gnu)\nThese shell commands are defined internally.  Type `help' to see this list.\nType `help name' to find out more about the function `name'.\nUse `info bash' to find out more about the shell in general.\nUse `man -k' or `info' to find out more about commands not in this list.\n");
+		printf( "Mard bash, version 1.1.0(1)-release (x86_64-pc-linux-gnu)\nThese shell commands are defined internally.  Type `help' to see this list.\nType `help name' to find out more about the function `name'.\n");
 		for (int i = 0; builtin_function_lookup_table[ i ].fn; i++){
 		    printf("%s\n", builtin_function_lookup_table[ i ].key);
 		}
@@ -44,16 +47,17 @@ void* bashHelp (void* args, int argc){
 
 			char* Path = (char *)malloc(defpath.size() * sizeof(char) + 1);
 
-			for(int i=0; i<defpath.size(); i++)
+			for(int i=0; i<(signed int)defpath.size(); i++)
 				Path[i]=defpath[i];
 			Path[defpath.size()]='\0';
 
-			char* argumentsToChangePath [] = {"cd", Path};
+			const char* argumentsToChangePath [] = {"cd", Path};
 			changeDirectory((void*)argumentsToChangePath, 2);
 
-			char* argToSend [] = {"nroff", "-man", manToOpen, NULL};
+			char* const argToSend [] = {(char*)"nroff", (char*)"-man", manToOpen, NULL};
 			std::string path = "/bin/nroff";
 			execv(path.c_str(), argToSend);
+
 
 			path = "/usr/bin/nroff";
 			execv(path.c_str(), argToSend);
@@ -62,9 +66,8 @@ void* bashHelp (void* args, int argc){
 			execv(path.c_str(), argToSend);
 
 
-
 			printf("Function '%s' not found\n",manToOpen);
-			exit(1);
+			exit(-1);
 		}
 		//wait for game to end
 		else{
@@ -72,6 +75,7 @@ void* bashHelp (void* args, int argc){
 		}
 
 	}
+	return (void*)0;
 }
 
 void* exitBash (void* args, int argc){
@@ -82,13 +86,17 @@ void* exitBash (void* args, int argc){
 void* printWorkingDirectory (void* args, int argc){
 	size_t currentpathsize = 50;
 	char* CURRENT_PATH = (char *)malloc(pathsize * sizeof(char));
-	getcwd(CURRENT_PATH, currentpathsize);
+	if (getcwd(CURRENT_PATH, currentpathsize)<0){
+		return (void*)-1;
+	}
 	printf("%s\n", CURRENT_PATH);
 	free (CURRENT_PATH);
+	return (void*)0;
 }
 
 void* clearScreen (void* args, int argc){
 	printf("\e[1;1H\e[2J");
+	return (void*)0;
 }
 
 void* listDirectory (void* args, int argc){
@@ -103,6 +111,7 @@ void* listDirectory (void* args, int argc){
 	int dir_count = 0;
 	int file_count = 0;
     struct dirent* dent;
+    std::vector<std::string>dirsOrFiles;
     DIR* srcdir = opendir(path.c_str());
 
     if (srcdir == NULL)
@@ -123,14 +132,20 @@ void* listDirectory (void* args, int argc){
             perror(dent->d_name);
             continue;
         }
-        printf("%s\n", dent->d_name);
+
+        dirsOrFiles.push_back(dent->d_name);
 
         if (S_ISDIR(st.st_mode)) dir_count++;
         else file_count++;
     }
+    sort(dirsOrFiles.begin(), dirsOrFiles.end());
+
+    for (int i=0; i<(signed int)dirsOrFiles.size(); i++)
+        printf("%s\n", dirsOrFiles[i].c_str());
+
     printf("--- Total %d directories, %d files found\n", dir_count, file_count);
-    if (dir_count>0)
-    	closedir(srcdir);
+//    if (dir_count>0 and file_count>0)
+	closedir(srcdir);
     return (void*)true;
 }
 
@@ -138,7 +153,7 @@ void* runGame (void* args, int argc){
 	if (argc<2){
 		printf("Use play [name] to play any of the following games!\n");
 		std::vector<char*> arguments;
-		arguments.push_back("ls");
+		arguments.push_back((char*)"ls");
 		std::string path = DEFAULT_PATH;
 		path += "/usr/games";
 		arguments.push_back(&path[0]);
@@ -157,11 +172,11 @@ void* runGame (void* args, int argc){
 
 			char* Path = (char *)malloc(defpath.size() * sizeof(char) + 1);
 
-			for(int i=0; i<defpath.size(); i++)
+			for(int i=0; i<(signed int)defpath.size(); i++)
 				Path[i]=defpath[i];
 			Path[defpath.size()]='\0';
 
-			char* argumentsToChangePath [] = {"cd", Path};
+			const char* argumentsToChangePath [] = {"cd", Path};
 			changeDirectory((void*)argumentsToChangePath, 2);
 
 			defpath += "/";
@@ -178,7 +193,7 @@ void* runGame (void* args, int argc){
 //			std::cout<<"argToSend is "<<argToSend[0]<<std::endl;
 			execv(path.c_str(), argToSend);
 			printf("Game '%s' not found\n",argToSend[0]);
-			exit(1);
+			exit(-1);
 		}
 		//wait for game to end
 		else{
@@ -186,6 +201,7 @@ void* runGame (void* args, int argc){
 		}
 
 	}
+	return (void*)0;
 }
 
 

@@ -1,1 +1,11 @@
-Display helpful information regarding builtin bash functions.
+.SH NAME yest - date manipulation utility.
+
+.SH SYNOPSIS .B yest\fR --help
+
+.P .B yest\fR --license
+
+.P .B yest\fR --version
+
+.P .B yest \fR[\fB--idf=\fIstr\fR] [\fB--tz=\fItzone\fR] [[\fB-\fR|\fB+\fR]\fIadjust\fR[\fBd\fR|\fBh\fR|\fBm\fR]] [\fIdate\fR] [\fIformat-string\fR] .
+
+SH DESCRIPTION This is called "yest" because the default is to output yesterday\'s date. This utility knows about leap year, daylight savings time, and such variations. This utility adds or subtracts days, hours, and/or minutes from a given date, and outputs the results in the specified format. The default, if no adjustment is specified, is "-1d"
