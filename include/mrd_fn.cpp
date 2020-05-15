@@ -1,4 +1,3 @@
-
 void* changeDirectory(void* args, int argc){
 	if (argc<2){
 		chdir(userInfo->pw_dir);
@@ -27,17 +26,6 @@ void* bashHelp (void* args, int argc){
 	}
 	else if (argc == 2) {
 		printf("help: ");
-//		char ** argv = (char**) args;
-//		for (int i = 0; builtin_function_lookup_table[ i ].fn; i++){
-//		    if (strcmp(builtin_function_lookup_table[i].key, argv[1])==0){
-////				printf(argv[1]);
-//		    	printf(builtin_function_lookup_table[i].man);
-//		    	return NULL;
-//		    }
-//		}
-//		printf("No such function found\n");
-
-
 		char** argv = (char**)args;
 		int childPid = 0;
 		if ((childPid = fork()) == 0){
@@ -105,7 +93,7 @@ void* listDirectory (void* args, int argc){
     if (argc<2){
     	path = "./";
     }
-	else {
+	else{
 		path = argv[1];
 	}
 	int dir_count = 0;
@@ -120,15 +108,13 @@ void* listDirectory (void* args, int argc){
         return (void*)-1;
     }
 
-    while((dent = readdir(srcdir)) != NULL)
-    {
+    while((dent = readdir(srcdir)) != NULL){
         struct stat st;
 
         if(strcmp(dent->d_name, ".") == 0 || strcmp(dent->d_name, "..") == 0)
             continue;
 
-        if (fstatat(dirfd(srcdir), dent->d_name, &st, 0) < 0)
-        {
+        if (fstatat(dirfd(srcdir), dent->d_name, &st, 0) < 0){
             perror(dent->d_name);
             continue;
         }
@@ -204,136 +190,64 @@ void* runGame (void* args, int argc){
 	return (void*)0;
 }
 
+void* setEnvironment (void* args, int argc){
+	char** argv = (char**) args;
+	if (argc>2){
+		bool OverWrite = false;
+		if(getenv(argv[1])) { //the Env Variable exists, so prompt overwrite
+			printf("The environment variable \"%s\" already exists.\n",argv[1]);
+			printf("Do you wish to overwrite its value? [Y/N] ");
+			char var;
+			var = getchar();
+			if (var == 'Y' or var == 'y'){
+				OverWrite = true;
+			}
+			else{
+				printf("The value was not set.\n");
+				return (void*)NULL;
+			}
+		}
+		printf("setenv called on %s to %s\n",argv[1], argv[2]);
+	    setenv(argv[1], argv[2], OverWrite);
+	}
+	return (void*)getenv(argv[1]);
+}
 
+void* unsetEnvironment (void* args, int argc){
+	if (argc>1){
+		char** argv = (char**) args;
+		if(getenv(argv[1])) { //the Env Variable exists, so unset it directly
+			printf("unsetenv called on %s\n",argv[1]);
+		    unsetenv(argv[1]);
+			return (void*)true;
+		}
+		else{
+			printf("Cannot unset as variable \"%s\" does not exist.\n",argv[1]);
+		}
+	}
+}
 
+void* getEnvironment (void* args, int argc){
+	if (argc==0){
+		getAllEnvironment(NULL, 0);
+		return (void*)true;
+	}
+	char** argv = (char**) args;
+	auto value = getenv(argv[1]);
+	if (value){
+		printf("%s=%s\n",argv[1],value);
+		return (void*)value;
+	}
+	else{
+		printf("Cannot get as variable \"%s\" does not exist.\n",argv[1]);
+		return (void*)NULL;
+	}
 
+}
 
-//================== DEPRECATED BUILT-IN FUNCTIONS ==================
+void* getAllEnvironment (void* args, int argc){
+	for (int i=0; environ[i]!=NULL; i++){
+		printf("%d. %s\n", i+1, environ[i]);
+	}
 
-//void* memeGenerator (void* args, int argc){
-//
-//	srand(time(NULL));
-//
-//    const char** argv = (const char**) args;
-//
-//    std::vector<std::string>Memes;
-//
-//    std::string path = "./usr/games/meme-generator/memes";
-//
-//	int dir_count = 0;
-//    struct dirent* dent;
-//    DIR* srcdir = opendir(path.c_str());
-//
-//    if (srcdir == NULL)
-//    {
-//        perror("opendir");
-//        return (void*)-1;
-//    }
-//
-//    while((dent = readdir(srcdir)) != NULL)
-//    {
-//        struct stat st;
-//
-//        if(strcmp(dent->d_name, ".") == 0 || strcmp(dent->d_name, "..") == 0)
-//            continue;
-//
-//        if (fstatat(dirfd(srcdir), dent->d_name, &st, 0) < 0)
-//        {
-//            perror(dent->d_name);
-//            continue;
-//        }
-//
-//        Memes.push_back(dent->d_name);
-//
-//        if (S_ISDIR(st.st_mode)) dir_count++;
-//    }
-//    closedir(srcdir);
-////    return (void*)dir_count;
-//
-//
-//    FILE * fp;
-//     char * line = NULL;
-//     size_t len = 0;
-//     ssize_t read;
-//
-//
-//    fp = fopen("./usr/games/meme-generator/captions", "r");
-//    if (fp == NULL)
-//        exit(EXIT_FAILURE);
-//
-//    std::vector<std::string> content;
-//    content.reserve(100);
-//    while ((read = getdelim(&line, &len, '%', fp)) != -1) {
-////        printf("Retrieved line of length %zu:\n", read);
-//        line[read-1]='\0';
-////        line[read]='\0';
-//
-////        printf("%s", line);
-//        content.push_back(line);
-//    }
-////    printf ("Length of vector is %d", content.size());
-////    for (int i=0; i<content.size(); i++){
-////        printf ("%s\n", content[i].c_str());
-////    }
-//
-//    printf("%s\n", content[rand()%content.size()].c_str());
-//
-//
-//    fclose(fp);
-//    if (line)
-//        free(line);
-//
-//
-//
-//
-//
-//
-//
-//	char * buffer = 0;
-//	long length;
-//
-//	std::string memePath = "./usr/games/meme-generator/memes/" + Memes[rand()%Memes.size()];
-//
-//	FILE * f = fopen (memePath.c_str(), "rb");
-//
-//	if (f)
-//	{
-//	  fseek (f, 0, SEEK_END);
-//	  length = ftell (f);
-//	  fseek (f, 0, SEEK_SET);
-//	  buffer = (char*) malloc (length);
-//	  if (buffer)
-//	  {
-//	    fread (buffer, 1, length, f);
-//	  }
-//	  fclose (f);
-//	}
-//
-//	printf(R"EOF(
-//%s
-//)EOF", buffer);
-//
-//}
-
-//void* systemCall (void* args, int argc){
-//    std::cout<<"System call activated\n";
-//    if (argc >= 2){
-//        char** newArgs= new char* [argc];
-//        char** argv = (char**) args;
-//        for (int i=1; i<argc; i++){
-//            newArgs[i-1] = argv[i];
-//        }
-//        newArgs[argc - 1] = NULL;
-//        std::string path = "/bin/";
-//        std::string command = newArgs[0];
-//        path = path + command;
-//        int childPid = 0;
-////        if ( childPid =)
-//        execv(path.c_str(), newArgs);
-//        std::cout<<"System call failed\n"<<std::endl;
-//    }
-//    else
-//        std::cout<<"Could not call: Accepts more than one argument\n";
-//}
-
-
+}

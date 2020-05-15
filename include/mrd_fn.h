@@ -1,15 +1,13 @@
-
 #ifndef MRD_FN_H_
 #define MRD_FN_H_
+
+#include <cstring>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <vector>
 #include <unistd.h>
 #include <fcntl.h>
-
-
-#include <iostream>
 
 #include <sys/wait.h>
 #include <sys/stat.h>
@@ -24,36 +22,39 @@
 
 #include <errno.h>
 
-void* changeDirectory(void* args, int argc);
-void* hello (void* args, int argc);
-void* bashHelp (void* args, int argc);
-void* exitBash (void* args, int argc);
-void* printWorkingDirectory (void* args, int argc);
-void* clearScreen (void* args, int argc);
-void* listDirectory (void* args, int argc);
-void* runGame (void* args, int argc);
-//void* memeGenerator (void* args, int argc);
-//void* systemCall (void* args, int argc);
+
+void* changeDirectory		(void*, int);
+void* hello 				(void*, int);
+void* bashHelp 				(void*, int);
+void* exitBash 				(void*, int);
+void* printWorkingDirectory (void*, int);
+void* clearScreen 			(void*, int);
+void* listDirectory 		(void*, int);
+void* runGame 				(void*, int);
+void* setEnvironment 		(void*, int);
+void* unsetEnvironment 		(void*, int);
+void* getEnvironment 		(void*, int);
+void* getAllEnvironment 	(void*, int);
 
 struct {
   void* (*fn)(void*, int);
   const char* key;
-//  const char* man;		/*ditched inbuilt man in favor of separate man pages*/
 } builtin_function_lookup_table[] =
   {
-  { &changeDirectory,   "cd"},
-  { &hello, "hello"},
-//  { &systemCall, "system"},		/*ditched system as a built-in command in favor of a separate exec'd program */
-  { &bashHelp, "help"},
-  { &printWorkingDirectory, "pwd"},
-  { &listDirectory, "ls"},
-  { &runGame, "play"},
-  { &clearScreen, "clear"},
-  { &exitBash, "exit"},
-//  { &memeGenerator, "meme-generator"},
-  { NULL,    NULL}
+	  { &changeDirectory,   		"cd"},
+	  { &clearScreen, 				"clear"},
+	  { &getAllEnvironment, 		"environ"},
+	  { &exitBash, 					"exit"},
+	  { &getEnvironment, 			"getenv"},
+	  { &hello, 					"hello"},
+	  { &bashHelp, 					"help"},
+	  { &listDirectory, 			"ls"},
+	  { &runGame, 					"play"},
+	  { &printWorkingDirectory, 	"pwd"},
+	  { &setEnvironment, 			"setenv"},
+	  { &unsetEnvironment, 			"unsetenv"},
+	  { NULL,    NULL}
   };
-
 
 
 bool lookup_and_call( char** arguments, int argument_count ){

@@ -12,10 +12,12 @@ const int KEY_DOWN []= {27, 91, 66};
 const int KEY_LEFT []= {27, 91, 68};
 const int KEY_RIGHT []= {27, 91, 67};
 
-void* helloWorld(){
-	printf("Hello world\n");
-	return (void*)0;
-}
+//void* helloWorld(){
+//	printf("Hello world\n");
+//	return (void*)0;
+//}
+
+
 
 //struct {
 //	int values [3];
@@ -29,29 +31,32 @@ void* helloWorld(){
 //};
 
 
+
+//bool special_key_lookup_and_call( char** arguments, int argument_count ){
+//	for (int i = 0; specialkeys_lookup_table[ i ].fn; i++)
+//    if (strcmp(specialkeys_lookup_table[ i ].key, arguments[0]) == 0){
+//      (*(specialkeys_lookup_table[ i ].fn))(arguments, argument_count-1); //-1 because we are excluding the NULL at the end
+//      return true;
+//     }
+//  return false;
+//}
+
+
 std::list <std::string> CommandHistory;
-std::list<std::string>::iterator cmdhist_it = CommandHistory.begin();
+std::list <std::string>::iterator cmdhist_it = CommandHistory.begin();
 
 
-void sigintHandler(int sig_num)
-{
+void sigintHandler(int sig_num){
     signal(SIGINT, sigintHandler);
     fflush(stdout);
 }
-
-struct environmentVariable{
-	void* string_value;
-	int integer_value;
-	char* key;
-};
-
-environmentVariable SHELL;
 
 
 
 /* declaring global Env variables for this terminal */
 size_t defaultpathsize = 50;
 char* DEFAULT_PATH  = (char *)malloc(defaultpathsize * sizeof(char));					//default path for terminal commands (Virtual System)
+
 size_t pathsize = 100;
 char* CURRENT_PATH_RELATIVE = (char *)malloc(pathsize * sizeof(char));
 
@@ -63,11 +68,8 @@ struct passwd * userInfo;
 /* end declaration */
 
 
-
-// Include all builtin functions of mard
+/* Include all builtin functions of mard */
 #include "./include/mrd_fn.h"
-
-
 
 
 /* ================ Assistive Terminal Functions START ================ */
@@ -108,174 +110,167 @@ void setCWD(){
 
 	free(CURRENT_PATH);
 }
+void fancyInput (int &characters, char* &input, int &CURSOR_POS){
+    int c; // used to capture the ASCII value of the input
 
-void inputLoop(){
-	char * input;
-	size_t inputsize = 100;
-	bool isDaemon = false;
-    input = (char *)malloc(inputsize * sizeof(char));
-	do {
-	    Color::Modifier red(Color::FG_GREEN);
-	    Color::Modifier def(Color::FG_DEFAULT);
-	    Color::Modifier green(Color::FG_BLUE);
-	    setCWD();
-	    printf("%s%s@%s%s:%s%s%s > ", red.getColor().c_str(), userInfo->pw_name, HOST_NAME, def.getColor().c_str(), green.getColor().c_str(), CURRENT_PATH_RELATIVE, def.getColor().c_str());
+    /* use system call to make terminal send all keystrokes directly to stdin */
+    system ("/bin/stty raw");
+    int specialKeyCount = 0;
+    std::string nbInput="";
+    int specialInput [] = {0, 0, 0};
 
-	    int characters = 0;
+    CURSOR_POS = 0;
 
-	    /* Uncomment this part, and comment the next section, to take normal inputs instead of fancy nb input */
-//	    auto characters = getline(&input, &inputsize, stdin);
-//	    input[characters-1] = '\0';
+    cmdhist_it = CommandHistory.end();
 
-	    int c; // used to capture the ASCII value of the input
-
-	    /* use system call to make terminal send all keystrokes directly to stdin */
-	    system ("/bin/stty raw");
-	    int specialKeyCount = 0;
-	    std::string nbInput="";
-	    int specialInput [] = {0, 0, 0};
-
-	    int CURSOR_POS = 0;
-
-	    cmdhist_it = CommandHistory.end();
-
-	    while((c=getchar())!= 13) {
-	      /* Use the ASCII value of ENTER to break out of the loop, since CTRL-D or CTRL-C won't work in raw */
+    while((c=getchar())!= 13) {
+      /* Use the ASCII value of ENTER to break out of the loop, since CTRL-D or CTRL-C won't work in raw */
 //	    	std::cout<<"{int is "<<c<<"}";
-	    	if (c == 127){
-	    		if (!nbInput.empty()){
-		    		printf("\b\b\b   \b\b\b");
-	    			nbInput.pop_back();
-	    			characters--;
-	    			CURSOR_POS--;
-	    		}
-	    		else {
-		    		printf("\b\b  \b\b");
-	    		}
-	    	}
-	    	else if (KEY_UP[specialKeyCount] ==  c){
+    	if (c == 127){
+    		if (!nbInput.empty()){
+	    		printf("\b\b\b   \b\b\b");
+    			nbInput.pop_back();
+    			characters--;
+    			CURSOR_POS--;
+    		}
+    		else {
+	    		printf("\b\b  \b\b");
+    		}
+    	}
+    	else if (KEY_UP[specialKeyCount] ==  c){
 //				std::cout << std::endl << "special input" << std::endl;//key up
-				specialInput[specialKeyCount] = c;
-				specialKeyCount++;
-				if (specialKeyCount == 3){
-					bool isSame=true;
-					for (int i=0; i<3; i++){
-						if (specialInput[i] != KEY_UP[i]){
-							isSame = false;
-							break;
-						}
+			specialInput[specialKeyCount] = c;
+			specialKeyCount++;
+			if (specialKeyCount == 3){
+				bool isSame=true;
+				for (int i=0; i<3; i++){
+					if (specialInput[i] != KEY_UP[i]){
+						isSame = false;
+						break;
 					}
-					if (isSame){
-						if (cmdhist_it!=CommandHistory.begin())
-							cmdhist_it--;
+				}
+				if (isSame){
+					if (cmdhist_it!=CommandHistory.begin())
+						cmdhist_it--;
 
-						if (!CommandHistory.empty()){
-							// remove the traces of previous input
-							std::string backTrack = "";
-							for (int i=0; i<(signed int)nbInput.size(); i++)
-								backTrack += '\b';
+					if (!CommandHistory.empty()){
+						// remove the traces of previous input
+						std::string backTrack = "";
+						for (int i=0; i<(signed int)nbInput.size(); i++)
+							backTrack += '\b';
 
-							for (int i=0; i<(signed int)nbInput.size(); i++)
-								backTrack += ' ';
+						for (int i=0; i<(signed int)nbInput.size(); i++)
+							backTrack += ' ';
 
-							for (int i=0; i<(signed int)nbInput.size(); i++)
-								backTrack += '\b';
+						for (int i=0; i<(signed int)nbInput.size(); i++)
+							backTrack += '\b';
 
-							// reassign input
-							nbInput = (*cmdhist_it);
+						// reassign input
+						nbInput = (*cmdhist_it);
 
-							printf("\b\b\b\b    \b\b\b\b%s%s", backTrack.c_str(), nbInput.c_str());
-	//						printf("[nbInput is %s]", nbInput.c_str());
-						}
-						else{
-							printf("\b\b\b\b    \b\b\b\b");
-						}
+						printf("\b\b\b\b    \b\b\b\b%s%s", backTrack.c_str(), nbInput.c_str());
+						CURSOR_POS = nbInput.size();
+//							printf("[%d]", CURSOR_POS);
+//							printf("[%d]", nbInput.size());
+
+//							printf("[%d]", CURSOR_POS);
+
+						//						printf("[nbInput is %s]", nbInput.c_str());
+					}
+					else{
+						printf("\b\b\b\b    \b\b\b\b");
+					}
 //						printf("\b\b\b\b[User pressed UP!]");
-						specialKeyCount = 0;
-					}
+					specialKeyCount = 0;
 				}
 			}
-			else if (KEY_DOWN[specialKeyCount] ==  c){
+		}
+		else if (KEY_DOWN[specialKeyCount] ==  c){
 //				std::cout << std::endl << "special input" << std::endl;//key up
-				specialInput[specialKeyCount] = c;
-				specialKeyCount++;
-				if (specialKeyCount == 3){
-					bool isSame=true;
-					for (int i=0; i<3; i++){
-						if (specialInput[i] != KEY_DOWN[i]){
-							isSame = false;
-							break;
-						}
+			specialInput[specialKeyCount] = c;
+			specialKeyCount++;
+			if (specialKeyCount == 3){
+				bool isSame=true;
+				for (int i=0; i<3; i++){
+					if (specialInput[i] != KEY_DOWN[i]){
+						isSame = false;
+						break;
 					}
-					if (isSame){
-						if (cmdhist_it!=CommandHistory.end())
-							cmdhist_it++;
+				}
+				if (isSame){
+					if (cmdhist_it!=CommandHistory.end())
+						cmdhist_it++;
 
-						if (!CommandHistory.empty()){
-							// remove the traces of previous input
-							std::string backTrack = "";
-							for (int i=0; i<(signed int)nbInput.size(); i++)
-								backTrack += '\b';
+					if (!CommandHistory.empty()){
+						// remove the traces of previous input
+						std::string backTrack = "";
+						for (int i=0; i<(signed int)nbInput.size(); i++)
+							backTrack += '\b';
 
-							for (int i=0; i<(signed int)nbInput.size(); i++)
-								backTrack += ' ';
+						for (int i=0; i<(signed int)nbInput.size(); i++)
+							backTrack += ' ';
 
-							for (int i=0; i<(signed int)nbInput.size(); i++)
-								backTrack += '\b';
+						for (int i=0; i<(signed int)nbInput.size(); i++)
+							backTrack += '\b';
 
-							// reassign input
-							nbInput = (*cmdhist_it);
+						// reassign input
+						nbInput = (*cmdhist_it);
 
-							printf("\b\b\b\b    \b\b\b\b%s%s", backTrack.c_str(), nbInput.c_str());
-	//						printf("[nbInput is %s]", nbInput.c_str());
-						}
-						else{
-							printf("\b\b\b\b    \b\b\b\b");
-						}
+						printf("\b\b\b\b    \b\b\b\b%s%s", backTrack.c_str(), nbInput.c_str());
+
+						CURSOR_POS = nbInput.size();
+
+//						printf("[nbInput is %s]", nbInput.c_str());
+					}
+					else{
+						printf("\b\b\b\b    \b\b\b\b");
+					}
 //						printf("\b\b\b\b[User pressed DOWN!]");
-						specialKeyCount = 0;					}
+					specialKeyCount = 0;
 				}
 			}
-			else if (KEY_LEFT[specialKeyCount] ==  c){
+		}
+		else if (KEY_LEFT[specialKeyCount] ==  c){
 //				std::cout << std::endl << "special input" << std::endl;//key up
-				specialInput[specialKeyCount] = c;
-				specialKeyCount++;
-				if (specialKeyCount == 3){
-					bool isSame=true;
-					for (int i=0; i<3; i++){
-						if (specialInput[i] != KEY_LEFT[i]){
-							isSame = false;
-							break;
-						}
-					}
-					if (isSame){
-//						printf("\b\b\b\b[User pressed LEFT!]");
-						if (CURSOR_POS>0){
-							CURSOR_POS--;
-							std::string backTracks = "";
-							int num = characters - CURSOR_POS;
-
-							for (int i=0; i<num; i++)
-								backTracks += '\b';
-							printf("\b\b\b\b    \b\b\b\b\b%s%s", &nbInput[CURSOR_POS], backTracks.c_str());
-						}
-						else{
-							printf("\b\b\b\b    \b\b\b\b");
-						}
-						specialKeyCount = 0;
-//						std::cout<<num;
+			specialInput[specialKeyCount] = c;
+			specialKeyCount++;
+			if (specialKeyCount == 3){
+				bool isSame=true;
+				for (int i=0; i<3; i++){
+					if (specialInput[i] != KEY_LEFT[i]){
+						isSame = false;
+						break;
 					}
 				}
+				if (isSame){
+//						printf("\b\b\b\b[User pressed LEFT!]");
+					if (CURSOR_POS>0){
+						CURSOR_POS--;
+						std::string backTracks = "";
+						int num = nbInput.size() - CURSOR_POS;
+
+						for (int i=0; i<num; i++)
+							backTracks += '\b';
+						printf("\b\b\b\b    \b\b\b\b\b%s%s", &nbInput[CURSOR_POS], backTracks.c_str());
+					}
+					else{
+						printf("\b\b\b\b    \b\b\b\b");
+					}
+					specialKeyCount = 0;
+//						std::cout<<num;
+				}
 			}
-			else{
-				specialKeyCount = 0;
-				if (CURSOR_POS<characters)
-					nbInput[CURSOR_POS] = (char)c;
-				else
-					nbInput += (char)c;
-				characters++;
-				CURSOR_POS++;
-			}
+		}
+		else{
+			specialKeyCount = 0;
+			if (CURSOR_POS<characters)
+				nbInput[CURSOR_POS] = (char)c;
+			else
+				nbInput += (char)c;
+			characters++;
+			CURSOR_POS++;
+//				printf("[%d]", CURSOR_POS);
+		}
 
 
 //	    	std::cout<<"[Cursor position is "<<CURSOR_POS<<"]";
@@ -284,28 +279,168 @@ void inputLoop(){
 //	    	moveCursor();
 
 
-	    }
-	    /* use system call to set terminal behaviour to more normal behaviour */
-	    system ("/bin/stty cooked");
+    }
+    /* use system call to set terminal behaviour to more normal behaviour */
+    system ("/bin/stty cooked");
 
-	    /* remove Enter ASCII ("^M") */
-	    printf("\b\b  \n");
+    /* remove Enter ASCII ("^M") */
+    printf("\b\b  \b\b%s\n", &nbInput[CURSOR_POS]);
 
-	    /* copy the nbInput string to the official input char* */
-	    strcpy( input, nbInput.c_str());
+    /* copy the nbInput string to the official input char* */
+    strcpy( input, nbInput.c_str());
 
-	    /* add command to Command History */
-	    if (nbInput != ""){
-	    	if (nbInput != CommandHistory.back()) //avoid repeating commands
-	    		CommandHistory.push_back(nbInput);
-	    }
+    /* add command to Command History */
+    if (nbInput != ""){
+    	if (nbInput != CommandHistory.back()) //avoid repeating commands
+    		CommandHistory.push_back(nbInput);
+    }
+
+}
+void normalInput (int &characters, char* &input, unsigned long int &inputsize){
+		characters = getline(&input, &inputsize, stdin);
+		input[characters-1] = '\0';
+}
+void tokenizeInput (char* input, std::vector<char*>& arguments, const char* token = " "){
+	int START_POS = 0;
+	int END_POS = 0;
+
+	for (int i=0; i<strlen(input); i++){
+//		input;
+	}
+
+
+	arguments.push_back( strtok (input,token) );
+	while (arguments[arguments.size()-1] != NULL) {
+//		printf("%s, ", arguments[arguments.size()-1]);
+		if (strchr(arguments[arguments.size() - 1], '<')!=nullptr){
+			if (strlen(arguments[arguments.size() - 1]) == 1){
+
+			}else{
+			arguments.push_back(strtok(arguments[arguments.size() - 1],"<"));
+			while (strchr(arguments[arguments.size() - 1], '<')!=NULL){
+				arguments.push_back("<");
+				arguments.push_back(strtok (NULL, "<"));
+			}
+			}
+		}
+		else{
+			arguments.push_back(strtok (NULL, token));
+		}
+	}
+	for (int i=0; i<arguments.size(); i++){
+		printf("%s, ", arguments[i]);
+	}
+
+//	printf("\n");
+}
+char* trimWhitespace(char* &str){
+  char *end;
+
+  // Trim leading space
+  while(isspace((unsigned char)*str)){
+	  str++;
+//	  printf("hello")
+  }
+
+  if(*str == 0)  // All spaces?
+    return str;
+
+  // Trim trailing space
+  end = str + strlen(str) - 1;
+  while(end > str && isspace((unsigned char)*end)) end--;
+
+  // Write new null terminator character
+  end[1] = '\0';
+
+  return str;
+}
+
+bool evalExpression(char* &input, std::vector<char*>arguments, int &EVAL_CODE){
+	EVAL_CODE = -1;
+	if (strchr(input,'=') != nullptr){
+		printf("Call to set an environment variable!\n");
+		tokenizeInput(input, arguments, "=");
+		int i;
+		for (i=0; i<arguments.size()-1; i++){
+			trimWhitespace (arguments[i]);
+			printf("%s, ", arguments[i]);
+		}
+		EVAL_CODE = i;
+		printf ("\b\b \n");
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+
+//bool evalExpression(std::vector<char*>arguments, int &EVAL_CODE){
+//	EVAL_CODE = -1;
+//	for (int k=0; k<arguments.size()-1; k++){
+//		if (strchr(arguments[k],'=') != nullptr){
+//			printf("Call to set an environment variable!\n");
+//			auto s = arguments[k];
+//			tokenizeInput(s, arguments, "=");
+//			int i;
+//			for (i=0; i<arguments.size()-1; i++){
+//				trimWhitespace (arguments[i]);
+//				printf("%s, ", arguments[i]);
+//			}
+//			EVAL_CODE = i;
+//			printf ("\b\b \n");
+//			return true;
+//		}
+//	}
+//	return false;
+//}
+
+void inputLoop(){
+	char * input;
+	size_t inputsize = 100;
+	bool isDaemon = false;
+    input = (char *)malloc(inputsize * sizeof(char));
+
+    int CURSOR_POS = 0;
+
+	#define ever (;;)
+
+    for ever {
+	    Color::Modifier red(Color::FG_GREEN);
+	    Color::Modifier def(Color::FG_DEFAULT);
+	    Color::Modifier green(Color::FG_BLUE);
+	    setCWD();
+	    printf("%s%s@%s%s:%s%s%s > ", red.getColor().c_str(), userInfo->pw_name, HOST_NAME, def.getColor().c_str(), green.getColor().c_str(), CURRENT_PATH_RELATIVE, def.getColor().c_str());
+
+
+	    /* contains the number of characters read by stdin
+	     * in both normalInput and fancyInput
+	     */
+	    int characters = 0;
+
+
+	    /* flush buffer to prevent leftover input from programs disturbing the terminal input */
+	    fflush(stdin);
+
+	    #ifdef linux
+	    /* For Linux systems only, right now */
+	    fancyInput(characters, input, CURSOR_POS);
+		#else
+	    /* For Mac, LSW, UNIX and other systems */
+	    normalInput(characters, input, inputsize);
+		#endif
+
+		std::vector <char *> arguments;
+
+	    /* before tokenization, we check if it is an expression or an environment variable definition */
+		int EVAL_CODE = 0;
+		evalExpression(input, arguments, EVAL_CODE);
+
 
 	    /* tokenize the input and place it into a vector of char* */
-		std::vector <char *> arguments;
-		arguments.push_back( strtok (input," ") );
-		while (arguments[arguments.size()-1] != NULL) {
-			arguments.push_back(strtok (NULL, " "));
-		}
+		tokenizeInput(input, arguments, " ");
+
+
 		int childPid = 0;
 
 		if (arguments[0] == NULL)
@@ -315,7 +450,7 @@ void inputLoop(){
 	    for (int i = (signed int)strlen(arguments[arguments.size()-2]) - 1; i>=0; i--){
 	    	if (arguments[arguments.size()-2][i] != ' ' && arguments[arguments.size()-2][i] != '\0'){
 	    		if (arguments[arguments.size()-2][i] == '&'){
-	    			std::cout<<"Is daemon\n";
+	    			printf("Is daemon\n");
 	    			isDaemon = true;
 	    			arguments[arguments.size()-2][i] = '\0';
 	    			characters--;
@@ -328,20 +463,29 @@ void inputLoop(){
 	    }
 
 
-		//check if a builtin bash command
-		if (lookup_and_call(&arguments[0], arguments.size())){
-//			printf("Called a built-in function\n");
-		}
-
-
+		//checks if a builtin bash command
+		if (lookup_and_call(&arguments[0], arguments.size())) {}
 		else if ((childPid = fork()) == 0){
-			//is a Virtual System command
+			//is a system command
 			if (strchr(arguments[0],'/') == nullptr){
+				//is a Virtual System command
 				std::string defpath = DEFAULT_PATH;
 				defpath += "/bin/";
 				std::string path = defpath + arguments[0];
 				char ** argv  = &arguments[0];
 				execv(path.c_str(), argv);
+
+
+				//is a Native System command
+				char* allpaths = getenv("PATH");
+			    path = strtok (allpaths,":");
+			    while (path.c_str() != NULL) {
+			        path = path + "/" + arguments[0];
+			    	execv(path.c_str(), argv);
+				    path = strtok(NULL, ":");
+			    }
+
+				//if both commands fail
 				printf("Command '%s' not found\n",arguments[0]);
 			}
 			//is a file or directory
@@ -353,15 +497,13 @@ void inputLoop(){
 			}
 			//everything failed
 			exit(1);
-
 		}
 		else{
 			if (!isDaemon)
 				waitpid(childPid,NULL,0);
 		}
-	} while(1);
+	}
 }
-
 void initializeTerminal(){
     signal(SIGINT, sigintHandler);
 	clearScreen(NULL, 0);
@@ -374,12 +516,6 @@ void initializeTerminal(){
 				break;
 		};
 	}
-
-//	std::string appendThis = "/bin/";
-//
-//	for (int i=defaultpathsize,j=0; appendThis[j]!='\0'; i++, j++){
-//		DEFAULT_PATH[i]=appendThis[j];
-//	}
 
 	gethostname(HOST_NAME, hostnamesize);
 	uname(&systemInfo);
@@ -401,12 +537,12 @@ void initializeTerminal(){
 	printf("mard is a chad 3rd-party bash. It comes with command history, a virtual machine, and even built-in games.\n");
 	printf("Use 'system' before a Linux/UNIX system call to use the machine's default system calls.\n\n");
 
-	printf("The default path is: %s\n\n", DEFAULT_PATH);
+	printf("The default path is: %s\n", DEFAULT_PATH);
+
+	printf("Env PATH variable is: %s\n\n", getenv("PATH"));
 
 }
 /* ================ Assistive Terminal Functions END ================ */
-
-
 
 
 /* driver code */
@@ -415,46 +551,3 @@ int main(int argc, char **argv) {
 	inputLoop();
 	return 0;
 }
-
-
-
-
-
-
-// Garbage code
-//	    int c = 0;
-//	    while(1)
-//	    {
-//	        c = 0;
-
-//	        char buff[2];
-//
-//	        int ret = read(0, buff, 2);
-//	        if (ret == -1) continue;
-//	        buff[ret] = '\0';
-//
-//	        printf("input was %c", buff);
-//
-//	        switch(c) {
-//	        case KEY_UP:
-//	            std::cout << std::endl << "Up" << std::endl;//key up
-//	            break;
-//	        case KEY_DOWN:
-//	        	std::cout << std::endl << "Down" << std::endl;   // key down
-//	            break;
-//	        case KEY_LEFT:
-//	        	std::cout << std::endl << "Left" << std::endl;  // key left
-//	            break;
-//	        case KEY_RIGHT:
-//	        	std::cout << std::endl << "Right" << std::endl;  // key right
-//	            break;
-//	        default:
-//	        	std::cout << std::endl << "null" << std::endl;  // not arrow
-//	            break;
-//	        }
-//
-//	    }
-
-
-
-
