@@ -5,7 +5,11 @@
 
 #include <pwd.h> //getting user info
 
+#include <pthread.h> //making background processes
+
 #include "./include/color_modder.h" //to alter bash output colors
+
+#define ever (;;)
 
 const int KEY_UP []= {27, 91, 65};
 const int KEY_DOWN []= {27, 91, 66};
@@ -46,6 +50,9 @@ std::list <std::string> CommandHistory;
 std::list <std::string>::iterator cmdhist_it = CommandHistory.begin();
 
 
+pthread_mutex_t lock;
+
+
 void sigintHandler(int sig_num){
     signal(SIGINT, sigintHandler);
     fflush(stdout);
@@ -73,7 +80,34 @@ struct passwd * userInfo;
 
 
 /* ================ Assistive Terminal Functions START ================ */
-void setCWD(){
+enum FLAGS {
+	NO_INPUT_FLAG,
+	DAEMON
+};
+
+int 	implementInput(std::vector<char*> &arguments, int FLAG);
+
+int childPid = 0;
+pthread_t currentDaemonListenerID;
+
+
+void* 	daemonListener(void * args){
+	//	printf("In the listener\n");
+	std::vector<char*>& theArguments = *reinterpret_cast<std::vector<char*>*>(args);
+
+	/* in case the original arguments get overriden */
+	std::vector<char*> backupArguments;
+	for (int i=0; i<theArguments.size(); i++){
+		backupArguments.push_back(theArguments[i]);
+	}
+	pthread_detach(pthread_self());
+
+    pthread_mutex_unlock(&lock);
+
+	implementInput (backupArguments, DAEMON);
+	printf("\n\rFinished job\n");
+}
+void 	setCWD(){
 	size_t currentpathsize = 100;
 	char* CURRENT_PATH = (char *)malloc(currentpathsize * sizeof(char));
 	getcwd(CURRENT_PATH, currentpathsize);
@@ -110,7 +144,7 @@ void setCWD(){
 
 	free(CURRENT_PATH);
 }
-void fancyInput (int &characters, char* &input, int &CURSOR_POS){
+void 	fancyInput (int &characters, char* &input, int &CURSOR_POS){
     int c; // used to capture the ASCII value of the input
 
     /* use system call to make terminal send all keystrokes directly to stdin */
@@ -280,7 +314,8 @@ void fancyInput (int &characters, char* &input, int &CURSOR_POS){
 
 
     }
-    /* use system call to set terminal behaviour to more normal behaviour */
+
+    /* use system call to set terminal behavior to more normal behavior */
     system ("/bin/stty cooked");
 
     /* remove Enter ASCII ("^M") */
@@ -296,44 +331,95 @@ void fancyInput (int &characters, char* &input, int &CURSOR_POS){
     }
 
 }
-void normalInput (int &characters, char* &input, unsigned long int &inputsize){
+void 	normalInput (int &characters, char* &input, unsigned long int &inputsize){
 		characters = getline(&input, &inputsize, stdin);
 		input[characters-1] = '\0';
 }
-void tokenizeInput (char* input, std::vector<char*>& arguments, const char* token = " "){
+
+struct 	Token{
+	const char token;
+	bool isIncluded;
+} tokenTypes_lookup_table[] =
+	{
+		{	' ', false	 },
+		{	'<', true	 },
+		{	'>', true	 },
+		{	'|', true	 },
+		{	'&', true	 },
+		{	 0 , false	 },
+		{	'?', false	 }  	//ending delimiter
+	};
+
+Token 	token_lookup (const char token){
+	int i;
+//	printf ("entering token checking: %c\n", token);
+	for (i=0; tokenTypes_lookup_table[i].token != '?'; i++){
+		if (token == tokenTypes_lookup_table[i].token){
+//			printf ("token found! %c", token);
+			return tokenTypes_lookup_table[i];
+		}
+	}
+	return tokenTypes_lookup_table[i];
+}
+void 	tokenizeInput (char* &input, std::vector<char*>& arguments, const char* token = " "){
 	int START_POS = 0;
 	int END_POS = 0;
 
-	for (int i=0; i<strlen(input); i++){
-//		input;
-	}
+//	printf("%s\n", input);
 
+	for (int i=0; i<strlen(input)+1; i++){
+//		printf("%d\n", i);
+		auto found = token_lookup(input[i]);
+		if (found.token != '?'){
+			END_POS = i;
+			if (END_POS - START_POS>0){
+				char* arg = (char*)malloc( (END_POS-START_POS+1) * sizeof(char));
+				strncpy(arg, &input[START_POS], END_POS - START_POS);
+				arg[END_POS-START_POS] = '\0';
+//				printf("%s\n", arg);
+				if (strcmp(arg, " ") != 0) //prevents pre-spaces in command
+					arguments.push_back(arg);
+				if (found.isIncluded){
+					char* argt = (char*)malloc(2 * sizeof(char));
+					argt[0] = found.token;
+					argt[1] = '\0';
+					arguments.push_back(argt);
+//					free (argt);  //cannot free because it would create a dangling pointer!
+//					i++;
+				}
+				i++;
+//				arguments[arguments.size() - 1] = arg;
+//				printf("pushed back %s\n", arg);
+				if (input[i]=='\0')
+					break;
 
-	arguments.push_back( strtok (input,token) );
-	while (arguments[arguments.size()-1] != NULL) {
-//		printf("%s, ", arguments[arguments.size()-1]);
-		if (strchr(arguments[arguments.size() - 1], '<')!=nullptr){
-			if (strlen(arguments[arguments.size() - 1]) == 1){
-
-			}else{
-			arguments.push_back(strtok(arguments[arguments.size() - 1],"<"));
-			while (strchr(arguments[arguments.size() - 1], '<')!=NULL){
-				arguments.push_back("<");
-				arguments.push_back(strtok (NULL, "<"));
-			}
+				char foundc;
+				do {
+					auto foundnext = token_lookup(input[i]);
+					foundc = foundnext.token;
+					if (foundnext.isIncluded){
+						char* argt = (char*)malloc(2 * sizeof(char));
+						argt[0] = foundnext.token;
+						argt[1] = '\0';
+						arguments.push_back(argt);
+	//					free (argt);  //cannot free because it would create a dangling pointer!
+	//					i++;
+					}
+					i++;
+				}while (foundc!='?');
+				START_POS = i-1;
 			}
 		}
-		else{
-			arguments.push_back(strtok (NULL, token));
-		}
-	}
-	for (int i=0; i<arguments.size(); i++){
-		printf("%s, ", arguments[i]);
 	}
 
-//	printf("\n");
+//	printf("Printing arguments\n");
+//	printf("%d\n", arguments.size());
+//	for (int i=0; i<arguments.size(); i++){
+//		printf("%d. %s\n", i, arguments[i]);
+//	}
+	arguments.push_back(NULL);
 }
-char* trimWhitespace(char* &str){
+char* 	trimWhitespace(char* &str){
   char *end;
 
   // Trim leading space
@@ -354,8 +440,7 @@ char* trimWhitespace(char* &str){
 
   return str;
 }
-
-bool evalExpression(char* &input, std::vector<char*>arguments, int &EVAL_CODE){
+bool 	evalExpression(char* &input, std::vector<char*>& arguments, int &EVAL_CODE){
 	EVAL_CODE = -1;
 	if (strchr(input,'=') != nullptr){
 		printf("Call to set an environment variable!\n");
@@ -373,51 +458,110 @@ bool evalExpression(char* &input, std::vector<char*>arguments, int &EVAL_CODE){
 		return false;
 	}
 }
+int 	understandInput(char* &input, std::vector<char*>& arguments){
+
+//	printf("%s\n", input);
+
+    /* tokenize the input and place it into a vector of char* */
+	tokenizeInput(input, arguments, " ");
+
+	/* after tokenization, we check if it is an expression or an environment variable definition */
+//	int EVAL_CODE = 0;
+//	evalExpression(input, arguments, EVAL_CODE);
+
+	if (arguments[0] == NULL)
+		return -1;
+
+    // checks if Daemon process or not (ampersand '&' in the end)
+	if (strcmp(arguments[arguments.size()-2], "&") == 0){
+//			printf("arg is %s", arguments[arguments.size()-2]);
+		arguments.pop_back();
+		arguments.pop_back();
+		arguments.push_back(NULL);
+//			printf("Is daemon\n");
+		return DAEMON;
+	}
+	return NO_INPUT_FLAG;
+}
+int 	implementInput(std::vector<char*> &arguments, int FLAG = NO_INPUT_FLAG){
+	int childPid = 0;
+	//checks if a builtin bash command
+	if (lookup_and_call(&arguments[0], arguments.size())) {}
+	else if ((childPid = fork()) == 0){
+
+		setenv("parent", getenv("SHELL"), true);
+
+		//is a system command
+		if (strchr(arguments[0],'/') == nullptr){
+			//is a Virtual System command
+			std::string defpath = getenv("SHELL");
+			defpath += "/bin/";
+			std::string path = defpath + arguments[0];
+			char ** argv  = &arguments[0];
+			execv(path.c_str(), argv);
 
 
-//bool evalExpression(std::vector<char*>arguments, int &EVAL_CODE){
-//	EVAL_CODE = -1;
-//	for (int k=0; k<arguments.size()-1; k++){
-//		if (strchr(arguments[k],'=') != nullptr){
-//			printf("Call to set an environment variable!\n");
-//			auto s = arguments[k];
-//			tokenizeInput(s, arguments, "=");
-//			int i;
-//			for (i=0; i<arguments.size()-1; i++){
-//				trimWhitespace (arguments[i]);
-//				printf("%s, ", arguments[i]);
-//			}
-//			EVAL_CODE = i;
-//			printf ("\b\b \n");
-//			return true;
-//		}
-//	}
-//	return false;
-//}
+			//is a Native System command
+			char* allpaths = getenv("PATH");
+		    path = strtok (allpaths,":");
+		    while (path.c_str() != nullptr) {
+		        path = path + "/" + arguments[0];
+		    	execv(path.c_str(), argv);
+			    path = strtok(NULL, ":");
+			    if (path == "\0")
+			    	break;
+		    }
+//			    printf("hello world");
 
-void inputLoop(){
+			//if both commands fail
+			printf("Command '%s' not found\n",arguments[0]);
+//				fflush(stdout); // Will now print everything in the stdout buffer
+		}
+		//is a file or directory
+		else{
+			std::string path = arguments[0];
+			char ** argv  = &arguments[0];
+			execv(path.c_str(), argv);
+			printf("mard: %s: No such file or directory\n", arguments[0]);
+		}
+		//everything failed
+		exit(1);
+	}
+	else{
+		if (FLAG == DAEMON)
+			printf ("[0] %d\n", childPid);
+
+		// clear argument list in the meantime...
+		for (int i=0; i<arguments.size(); i++){
+			if (arguments[i])
+				free (arguments[i]);
+		}
+
+		for (int i=0; i<arguments.size(); i++){
+			arguments.pop_back();
+		}
+
+		waitpid (childPid, NULL, 0);
+	}
+}
+void 	inputLoop(){
 	char * input;
 	size_t inputsize = 100;
-	bool isDaemon = false;
     input = (char *)malloc(inputsize * sizeof(char));
-
     int CURSOR_POS = 0;
 
-	#define ever (;;)
-
+    /* Runs forever ;) */
     for ever {
-	    Color::Modifier red(Color::FG_GREEN);
+	    Color::Modifier green(Color::FG_GREEN);
 	    Color::Modifier def(Color::FG_DEFAULT);
-	    Color::Modifier green(Color::FG_BLUE);
+	    Color::Modifier blue(Color::FG_BLUE);
 	    setCWD();
-	    printf("%s%s@%s%s:%s%s%s > ", red.getColor().c_str(), userInfo->pw_name, HOST_NAME, def.getColor().c_str(), green.getColor().c_str(), CURRENT_PATH_RELATIVE, def.getColor().c_str());
-
+	    printf("%s%s@%s%s:%s%s%s > ", green.getColor().c_str(), userInfo->pw_name, HOST_NAME, def.getColor().c_str(), blue.getColor().c_str(), CURRENT_PATH_RELATIVE, def.getColor().c_str());
 
 	    /* contains the number of characters read by stdin
 	     * in both normalInput and fancyInput
 	     */
 	    int characters = 0;
-
 
 	    /* flush buffer to prevent leftover input from programs disturbing the terminal input */
 	    fflush(stdin);
@@ -430,91 +574,51 @@ void inputLoop(){
 	    normalInput(characters, input, inputsize);
 		#endif
 
+
+
+
 		std::vector <char *> arguments;
 
-	    /* before tokenization, we check if it is an expression or an environment variable definition */
-		int EVAL_CODE = 0;
-		evalExpression(input, arguments, EVAL_CODE);
-
-
-	    /* tokenize the input and place it into a vector of char* */
-		tokenizeInput(input, arguments, " ");
-
-
-		int childPid = 0;
-
-		if (arguments[0] == NULL)
+		int didItUnderstand = understandInput (input, arguments);
+		if ( didItUnderstand < 0)
 			continue;
 
-	    // checks if Daemon process or not (ampersand '&' in the end)
-	    for (int i = (signed int)strlen(arguments[arguments.size()-2]) - 1; i>=0; i--){
-	    	if (arguments[arguments.size()-2][i] != ' ' && arguments[arguments.size()-2][i] != '\0'){
-	    		if (arguments[arguments.size()-2][i] == '&'){
-	    			printf("Is daemon\n");
-	    			isDaemon = true;
-	    			arguments[arguments.size()-2][i] = '\0';
-	    			characters--;
-	    		}
-	    		break;
-	    	}
-	    	else{
-	    		arguments[arguments.size()-2][i] = '\0';
-	    	}
-	    }
+		// clear input...
+		if (input)
+			free (input);
 
 
-		//checks if a builtin bash command
-		if (lookup_and_call(&arguments[0], arguments.size())) {}
-		else if ((childPid = fork()) == 0){
-			//is a system command
-			if (strchr(arguments[0],'/') == nullptr){
-				//is a Virtual System command
-				std::string defpath = DEFAULT_PATH;
-				defpath += "/bin/";
-				std::string path = defpath + arguments[0];
-				char ** argv  = &arguments[0];
-				execv(path.c_str(), argv);
+		if (didItUnderstand == NO_INPUT_FLAG)
+			implementInput (arguments);
+		else if (didItUnderstand == DAEMON){
+		    if (pthread_mutex_init(&lock, NULL) != 0) {
+		         printf("mutex init has failed\n");
+		         return;
+		    }
+		    pthread_mutex_lock(&lock);
+		    pthread_create(&currentDaemonListenerID, NULL, daemonListener, (void*)&arguments);
+		    pthread_mutex_lock(&lock);
 
-
-				//is a Native System command
-				char* allpaths = getenv("PATH");
-			    path = strtok (allpaths,":");
-			    while (path.c_str() != NULL) {
-			        path = path + "/" + arguments[0];
-			    	execv(path.c_str(), argv);
-				    path = strtok(NULL, ":");
-			    }
-
-				//if both commands fail
-				printf("Command '%s' not found\n",arguments[0]);
-			}
-			//is a file or directory
-			else{
-				std::string path = arguments[0];
-				char ** argv  = &arguments[0];
-				execv(path.c_str(), argv);
-				printf("mard: %s: No such file or directory\n", arguments[0]);
-			}
-			//everything failed
-			exit(1);
+		    pthread_mutex_destroy(&lock);
 		}
-		else{
-			if (!isDaemon)
-				waitpid(childPid,NULL,0);
-		}
-	}
+    }
 }
-void initializeTerminal(){
+void 	initializeTerminal(){
     signal(SIGINT, sigintHandler);
 	clearScreen(NULL, 0);
 	getcwd(DEFAULT_PATH, defaultpathsize);
 
+	// Setting SHELL's default path
+	setenv("SHELL", DEFAULT_PATH, 1);
 
 	for (int i=0;; i++){
 		if (DEFAULT_PATH[i]=='\0'){
 				defaultpathsize=i;
 				break;
 		};
+	}
+	if (DEFAULT_PATH){
+		free(DEFAULT_PATH);
 	}
 
 	gethostname(HOST_NAME, hostnamesize);
@@ -537,7 +641,7 @@ void initializeTerminal(){
 	printf("mard is a chad 3rd-party bash. It comes with command history, a virtual machine, and even built-in games.\n");
 	printf("Use 'system' before a Linux/UNIX system call to use the machine's default system calls.\n\n");
 
-	printf("The default path is: %s\n", DEFAULT_PATH);
+	printf("The default path is: %s\n", getenv("SHELL"));
 
 	printf("Env PATH variable is: %s\n\n", getenv("PATH"));
 

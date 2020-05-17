@@ -30,7 +30,7 @@ void* bashHelp (void* args, int argc){
 		int childPid = 0;
 		if ((childPid = fork()) == 0){
 			char* manToOpen= argv[1];
-			std::string defpath = DEFAULT_PATH;
+			std::string defpath = getenv("SHELL");
 			defpath += "/usr/share/man/";
 
 			char* Path = (char *)malloc(defpath.size() * sizeof(char) + 1);
@@ -140,7 +140,7 @@ void* runGame (void* args, int argc){
 		printf("Use play [name] to play any of the following games!\n");
 		std::vector<char*> arguments;
 		arguments.push_back((char*)"ls");
-		std::string path = DEFAULT_PATH;
+		std::string path = getenv("SHELL");
 		path += "/usr/games";
 		arguments.push_back(&path[0]);
 //		std::cout<<"Path is "<<path<<std::endl;
@@ -152,7 +152,7 @@ void* runGame (void* args, int argc){
 		int childPid = 0;
 		if ((childPid = fork()) == 0){
 			const char* gameToPlay= argv[1];
-			std::string defpath = DEFAULT_PATH;
+			std::string defpath = getenv("SHELL");
 			defpath += "/usr/games/";
 			defpath += gameToPlay;
 
