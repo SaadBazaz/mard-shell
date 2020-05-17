@@ -9,3 +9,4 @@ Ask my instructors.
 - Command History (session only, for now)
 - Built-in games and meme-generator
 - Simulated system + original system command support
+- Multithreaded background processes support
