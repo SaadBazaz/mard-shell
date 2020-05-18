@@ -9,6 +9,8 @@
 
 #include "./include/color_modder.h" //to alter bash output colors
 
+#include <stdlib.h> //for atoi function
+
 #define ever (;;)
 
 const int KEY_UP []= {27, 91, 65};
@@ -80,32 +82,33 @@ struct passwd * userInfo;
 
 
 /* ================ Assistive Terminal Functions START ================ */
-enum FLAGS {
+enum EXPRS {
 	NO_INPUT_FLAG,
-	DAEMON
+	DAEMON,
+	STD_REDIR,
+	PIPE
 };
 
-int 	implementInput(std::vector<char*> &arguments, int FLAG);
+struct InputEvaluator {
+	int THREAD_TYPE;
+	int EXPR;
+	int BreakPoint;
+
+	InputEvaluator (int TT, int E, int BP): THREAD_TYPE(TT), EXPR(E), BreakPoint(BP){}
+};
+
+int 	implementInput(std::vector<char*> &, int);
 
 int childPid = 0;
 pthread_t currentDaemonListenerID;
 
 
 void* 	daemonListener(void * args){
-	//	printf("In the listener\n");
-	std::vector<char*>& theArguments = *reinterpret_cast<std::vector<char*>*>(args);
-
-	/* in case the original arguments get overriden */
-	std::vector<char*> backupArguments;
-	for (int i=0; i<theArguments.size(); i++){
-		backupArguments.push_back(theArguments[i]);
-	}
-	pthread_detach(pthread_self());
-
-    pthread_mutex_unlock(&lock);
-
-	implementInput (backupArguments, DAEMON);
-	printf("\n\rFinished job\n");
+//	printf("In the listener\n");
+	int childPid = (intptr_t)args;
+	printf("[0] %d\n", childPid);
+	waitpid(childPid, NULL, 0);
+	printf("[0]\tDone\t\t\t%d\n", childPid);
 }
 void 	setCWD(){
 	size_t currentpathsize = 100;
@@ -128,8 +131,10 @@ void 	setCWD(){
 			CURRENT_PATH_RELATIVE[i] = CURRENT_PATH[i];
 		}
 		CURRENT_PATH_RELATIVE[i] = '\0';
-		if (CURRENT_PATH)
+		if (CURRENT_PATH){
 			free (CURRENT_PATH);
+			CURRENT_PATH = nullptr;
+		}
 	}
 	else{
 		CURRENT_PATH_RELATIVE[0]='~';
@@ -142,7 +147,11 @@ void 	setCWD(){
 
 	pathsize = strlen(CURRENT_PATH_RELATIVE);
 
-	free(CURRENT_PATH);
+	if (CURRENT_PATH){
+		free(CURRENT_PATH);
+		CURRENT_PATH = nullptr;
+	}
+
 }
 void 	fancyInput (int &characters, char* &input, int &CURSOR_POS){
     int c; // used to capture the ASCII value of the input
@@ -440,24 +449,83 @@ char* 	trimWhitespace(char* &str){
 
   return str;
 }
-bool 	evalExpression(char* &input, std::vector<char*>& arguments, int &EVAL_CODE){
-	EVAL_CODE = -1;
-	if (strchr(input,'=') != nullptr){
-		printf("Call to set an environment variable!\n");
-		tokenizeInput(input, arguments, "=");
-		int i;
-		for (i=0; i<arguments.size()-1; i++){
-			trimWhitespace (arguments[i]);
-			printf("%s, ", arguments[i]);
+int 	evalExpression(std::vector<char*>& arguments, std::vector<char*>&LHS, std::vector<char*>&RHS, int &START_POINT){
+//	EVAL_CODE = -1;
+
+
+	int CURRENT_FLAG = -1;
+
+	LHS.clear();
+	RHS.clear();
+
+	int i=START_POINT;
+	bool alteredLHS = false;
+	for (; i<arguments.size()-1; i++){
+//		printf("In Eval Loop, i = %d\n", i);
+		if (strcmp(arguments[i], ">") == 0){
+//			for (; i<arguments.size(); i++){
+//				printf("In Eval Loop, assigning RHS, i = %d\n", i);
+//				printf("RHS = %s\n", arguments[i+1]);
+			if (RHS.empty()){
+				RHS.push_back(arguments[++i]);
+				RHS.push_back(NULL);
+			}
+			else{
+				RHS[0] = arguments[++i];
+			}
+				CURRENT_FLAG = STD_REDIR;
+//			}
+
 		}
-		EVAL_CODE = i;
-		printf ("\b\b \n");
-		return true;
+		else if (strcmp(arguments[i], "<") == 0){
+			if (RHS.empty()){
+				RHS.push_back(NULL);
+				RHS.push_back(arguments[++i]);
+			}
+			else{
+				RHS[1] = arguments[++i];
+			}
+		}
+		else{
+			LHS.push_back(arguments[i]);
+			alteredLHS = true;
+		}
 	}
-	else {
-		return false;
-	}
+	if (alteredLHS)
+		LHS.push_back(NULL);
+//	printf("Exited Loop, START_POINT = %d\n", START_POINT);
+	START_POINT = i;
+
+//	printf("STD_REDIR Flag is %d\n", STD_REDIR);
+//	printf("CURRENT Flag is %d\n", CURRENT_FLAG);
+
+	return CURRENT_FLAG;
+//	printf ("Start point in function is %d", START_POINT);
+//
+//	for (int i=0; i<arguments.size(); i++){
+//		if (token_lookup(arguments[i][0]) == " ") {}
+//	}
+
+
+//	if (strchr(input,'=') != nullptr){
+//		printf("Call to set an environment variable!\n");
+//		tokenizeInput(input, arguments, "=");
+//		int i;
+//		for (i=0; i<arguments.size()-1; i++){
+//			trimWhitespace (arguments[i]);
+//			printf("%s, ", arguments[i]);
+//		}
+//		EVAL_CODE = i;
+//		printf ("\b\b \n");
+//		return true;
+//	}
+//	else {
+//		return false;
+//	}
 }
+
+
+
 int 	understandInput(char* &input, std::vector<char*>& arguments){
 
 //	printf("%s\n", input);
@@ -465,83 +533,147 @@ int 	understandInput(char* &input, std::vector<char*>& arguments){
     /* tokenize the input and place it into a vector of char* */
 	tokenizeInput(input, arguments, " ");
 
-	/* after tokenization, we check if it is an expression or an environment variable definition */
-//	int EVAL_CODE = 0;
-//	evalExpression(input, arguments, EVAL_CODE);
-
-	if (arguments[0] == NULL)
+	if (arguments[0] == NULL){
 		return -1;
-
-    // checks if Daemon process or not (ampersand '&' in the end)
-	if (strcmp(arguments[arguments.size()-2], "&") == 0){
-//			printf("arg is %s", arguments[arguments.size()-2]);
-		arguments.pop_back();
-		arguments.pop_back();
-		arguments.push_back(NULL);
-//			printf("Is daemon\n");
-		return DAEMON;
 	}
+
 	return NO_INPUT_FLAG;
+
 }
 int 	implementInput(std::vector<char*> &arguments, int FLAG = NO_INPUT_FLAG){
 	int childPid = 0;
-	//checks if a builtin bash command
-	if (lookup_and_call(&arguments[0], arguments.size())) {}
-	else if ((childPid = fork()) == 0){
 
-		setenv("parent", getenv("SHELL"), true);
+	/* before launching, we check if it is an expression or an environment variable definition */
+//	int BreakPoint;
 
-		//is a system command
-		if (strchr(arguments[0],'/') == nullptr){
-			//is a Virtual System command
-			std::string defpath = getenv("SHELL");
-			defpath += "/bin/";
-			std::string path = defpath + arguments[0];
-			char ** argv  = &arguments[0];
-			execv(path.c_str(), argv);
+	/* left hand side is always writer, right hand side is reader */
+	std::vector<char*> LHS;
+	std::vector<char*> RHS;
 
+	int START_POINT = 0;
+	int _EXPR = evalExpression(arguments, LHS, RHS, START_POINT);
+//	printf ("wtf, _EXPR = %d \n", _EXPR);
 
-			//is a Native System command
-			char* allpaths = getenv("PATH");
-		    path = strtok (allpaths,":");
-		    while (path.c_str() != nullptr) {
-		        path = path + "/" + arguments[0];
-		    	execv(path.c_str(), argv);
-			    path = strtok(NULL, ":");
-			    if (path == "\0")
-			    	break;
-		    }
-//			    printf("hello world");
+	while (!LHS.empty()){
 
-			//if both commands fail
-			printf("Command '%s' not found\n",arguments[0]);
-//				fflush(stdout); // Will now print everything in the stdout buffer
+	//	bool isAnExpression = ( _EXPR < 0 ? false : true);
+
+		// checks if Daemon process or not (ampersand '&' in the end)
+		if (strcmp(LHS[LHS.size()-2], "&") == 0){
+	//		printf("arg is %s", arguments[arguments.size()-2]);
+			LHS.pop_back();
+			LHS.pop_back();
+			LHS.push_back(NULL);
+	//		printf("Is daemon\n");
+			FLAG = DAEMON;
 		}
-		//is a file or directory
+
+
+		char ** argv  = &LHS[0];
+
+
+
+		//checks if a builtin bash command
+		if (FLAG != DAEMON and RHS.empty() and lookup_and_call(argv, LHS.size())) {}
+		else if ((childPid = fork()) == 0){
+			setenv("parent", getenv("SHELL"), true);
+
+//			printf ("First I'm here\n");
+			//is an expression, so treat non commands as open
+			if (!RHS.empty()){
+//				printf ("Then I'm here\n");
+//				printf ("_EXPR = %d \n", _EXPR);
+				/* in the case of STD_REDIRECTION, LHS contains the COMMAND,
+				 * RHS[0] contains STD_OUT Filename
+				 * RHS[1] contains STD_IN Filename
+				 */
+
+				if (_EXPR == STD_REDIR){
+//					printf ("Finally, I'm here\n");
+					if (RHS[0]!=NULL){
+//						printf ("RHS is %s\n", RHS[0]);
+						int fd = open(RHS[0], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+						dup2(fd, 1);
+						close (fd);
+					}
+					if (RHS[1]!=NULL){
+						int fd = open(RHS[1], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+						dup2(fd, 0);
+						close (fd);
+					}
+				}
+				else if (_EXPR == PIPE){
+
+				}
+
+			}
+
+
+			//If it's a daemon, checks if a builtin bash command
+			if (lookup_and_call(argv, LHS.size())) {
+				exit(0);
+			}
+
+
+			//is a system command
+			if (strchr(arguments[0],'/') == nullptr){
+				//is a Virtual System command
+				std::string defpath = getenv("SHELL");
+				defpath += "/bin/";
+				std::string path = defpath + LHS[0];
+				execv(path.c_str(), argv);
+
+
+				//is a Native System command
+				char* allpaths = getenv("PATH");
+				path = strtok (allpaths,":");
+				while (path.c_str() != nullptr) {
+					path = path + "/" + LHS[0];
+					execv(path.c_str(), argv);
+					path = strtok(NULL, ":");
+					if (path == "\0")
+						break;
+				}
+	//			    printf("hello world");
+
+				//if both commands fail
+				printf("Command '%s' not found\n",LHS[0]);
+	//				fflush(stdout); // Will now print everything in the stdout buffer
+			}
+			//is a file or directory
+			else{
+				std::string path = LHS[0];
+				execv(path.c_str(), argv);
+				printf("mard: %s: No such file or directory\n", LHS[0]);
+			}
+
+			//everything failed
+			exit(1);
+		}
 		else{
-			std::string path = arguments[0];
-			char ** argv  = &arguments[0];
-			execv(path.c_str(), argv);
-			printf("mard: %s: No such file or directory\n", arguments[0]);
-		}
-		//everything failed
-		exit(1);
-	}
-	else{
-		if (FLAG == DAEMON)
-			printf ("[0] %d\n", childPid);
 
-		// clear argument list in the meantime...
-		for (int i=0; i<arguments.size(); i++){
-			if (arguments[i])
-				free (arguments[i]);
+	//		printf("InpE.ThreadType is %d\n", InpE.THREAD_TYPE);
+			if (FLAG == DAEMON){
+				pthread_create(&currentDaemonListenerID, NULL, daemonListener, (void*)(intptr_t)childPid);
+			}
+			else
+				waitpid(childPid, NULL, 0);
+
+			// clear argument list in the meantime...
+	//		for (int i=0; i<arguments.size(); i++){
+	//			if (arguments[i])
+	//				free (arguments[i]);
+	//		}
+	//
+	//		for (int i=0; i<arguments.size(); i++){
+	//			arguments.pop_back();
+	//		}
+
+//			LHS.clear();
 		}
 
-		for (int i=0; i<arguments.size(); i++){
-			arguments.pop_back();
-		}
-
-		waitpid (childPid, NULL, 0);
+//		printf ("Start point in expr loop is %d", START_POINT);
+		_EXPR = evalExpression(arguments, LHS, RHS, START_POINT);
 	}
 }
 void 	inputLoop(){
@@ -575,32 +707,21 @@ void 	inputLoop(){
 		#endif
 
 
-
-
 		std::vector <char *> arguments;
 
-		int didItUnderstand = understandInput (input, arguments);
-		if ( didItUnderstand < 0)
+		auto didItUnderstand = understandInput (input, arguments);
+		if (didItUnderstand < 0)
 			continue;
 
+
+		/* causes segfaults and double free or corruption (fasttop) */
 		// clear input...
-		if (input)
-			free (input);
+//		if (input){
+//			free (input);
+////			input = nullptr;
+//		}
 
-
-		if (didItUnderstand == NO_INPUT_FLAG)
-			implementInput (arguments);
-		else if (didItUnderstand == DAEMON){
-		    if (pthread_mutex_init(&lock, NULL) != 0) {
-		         printf("mutex init has failed\n");
-		         return;
-		    }
-		    pthread_mutex_lock(&lock);
-		    pthread_create(&currentDaemonListenerID, NULL, daemonListener, (void*)&arguments);
-		    pthread_mutex_lock(&lock);
-
-		    pthread_mutex_destroy(&lock);
-		}
+		implementInput (arguments, didItUnderstand);
     }
 }
 void 	initializeTerminal(){
@@ -618,7 +739,9 @@ void 	initializeTerminal(){
 		};
 	}
 	if (DEFAULT_PATH){
+//		printf("boutta do a fasttop error");
 		free(DEFAULT_PATH);
+		DEFAULT_PATH = nullptr;
 	}
 
 	gethostname(HOST_NAME, hostnamesize);
