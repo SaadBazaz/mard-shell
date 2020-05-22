@@ -533,31 +533,21 @@ int 	implementInput(std::vector<char*> &arguments, int FLAG = NO_INPUT_FLAG){
 		char ** argv  = &commands[i].arguments[0];
 
 
-		//checks if a builtin bash command
+		/* checks if a builtin bash command (normal and non-Daemon - results in faster execution) */
 		if (FLAG != DAEMON and commands[i].input_fd==DEFAULT_STD_IN and commands[i].output_fd==DEFAULT_STD_OUT and lookup_and_call(argv, commands[i].arguments.size())) {}
 		else if ((childPid = fork()) == 0){
 			setenv("parent", getenv("SHELL"), true);
 
 
-//			printf ("command is %s\n", commands[i].arguments[0]);
-//			printf ("input fd is %d, output fd is %d\n", commands[i].input_fd, commands[i].output_fd);
-
-
-			/* redirect I/O if the default input and output have been changed */
+			/* redirects I/O if the default input and output have been changed */
 			if (commands[i].input_fd!=DEFAULT_STD_IN){
-//				printf ("Second I'm here\n");
 				dup2(commands[i].input_fd, DEFAULT_STD_IN);
-//				close (3);
-//				close (4);
 			}
 			if (commands[i].output_fd!=DEFAULT_STD_OUT){
-//				printf ("First I'm here\n");
 				dup2(commands[i].output_fd, DEFAULT_STD_OUT);
-//				close (3);
-//				close (4);
 			}
 
-			//If it's a daemon, checks if a builtin bash command
+			/* If it's a daemon, checks if a builtin bash command */
 			if (lookup_and_call(argv, commands[i].arguments.size())) {
 				exit(0);
 			}
@@ -577,17 +567,16 @@ int 	implementInput(std::vector<char*> &arguments, int FLAG = NO_INPUT_FLAG){
 				path = strtok (allpaths,":");
 				while (path.c_str() != nullptr) {
 					path = path + "/" + commands[i].arguments[0];
-//					printf("%s\n", path.c_str());
 					execv(path.c_str(), argv);
 					path = strtok(NULL, ":");
-					if (path == "\0")
+					if (path == ""){}
+					else
 						break;
 				}
-	//			    printf("hello world");
 
+				fflush(stdout); // Will now print everything in the stdout buffer
 				//if both commands fail
 				printf("Command '%s' not found\n",commands[i].arguments[0]);
-	//				fflush(stdout); // Will now print everything in the stdout buffer
 			}
 			//is a file or directory
 			else{
@@ -600,9 +589,6 @@ int 	implementInput(std::vector<char*> &arguments, int FLAG = NO_INPUT_FLAG){
 			exit(1);
 		}
 		else{
-
-
-	//		printf("InpE.ThreadType is %d\n", InpE.THREAD_TYPE);
 			if (FLAG == DAEMON or commands[i].flag == PIPE){
 				if (commands[i].output_fd != DEFAULT_STD_OUT)
 					close (commands[i].output_fd);
@@ -617,22 +603,17 @@ int 	implementInput(std::vector<char*> &arguments, int FLAG = NO_INPUT_FLAG){
 					close (commands[i].input_fd);
 				waitpid(childPid, NULL, 0);
 			}
-			// clear argument list in the meantime...
-	//		for (int i=0; i<arguments.size(); i++){
-	//			if (arguments[i])
-	//				free (arguments[i]);
-	//		}
-	//
-	//		for (int i=0; i<arguments.size(); i++){
-	//			arguments.pop_back();
-	//		}
-
-//			LHS.clear();
 		}
-
-//		printf ("Start point in expr loop is %d", START_POINT);
-//		_EXPR = evalExpression(arguments, commands);
 	}
+	// clear argument list after the loop ends and all commands have been executed...
+	for (int i=0; i<arguments.size(); i++){
+		if (arguments[i])
+			free (arguments[i]);
+	}
+	for (int i=0; i<arguments.size(); i++){
+		arguments.pop_back();
+	}
+
 }
 void 	inputLoop(){
 	char * input;
