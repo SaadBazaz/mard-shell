@@ -86,29 +86,31 @@ enum EXPRS {
 	NO_INPUT_FLAG,
 	DAEMON,
 	STD_REDIR,
-	PIPE
+	PIPE,
+	PIPE_END
 };
 
-struct InputEvaluator {
-	int THREAD_TYPE;
-	int EXPR;
-	int BreakPoint;
-
-	InputEvaluator (int TT, int E, int BP): THREAD_TYPE(TT), EXPR(E), BreakPoint(BP){}
-};
-
-int 	implementInput(std::vector<char*> &, int);
 
 int childPid = 0;
-pthread_t currentDaemonListenerID;
 
 
 void* 	daemonListener(void * args){
 //	printf("In the listener\n");
-	int childPid = (intptr_t)args;
-	printf("[0] %d\n", childPid);
+	int * argv = (int *)args;
+	int childPid = argv[0];
+	int flag = argv[1];
+	if (flag != PIPE)
+		printf("[%lu] %d\n", pthread_self(), childPid);
 	waitpid(childPid, NULL, 0);
-	printf("[0]\tDone\t\t\t%d\n", childPid);
+	if (flag != PIPE)
+		printf("[%lu]\tDone\t\t\t%d\n", pthread_self(), childPid);
+	if (argv){
+		free (argv);
+		argv = NULL;
+	}
+
+	/* toDo: return status of child */
+	return (void*)0;
 }
 void 	setCWD(){
 	size_t currentpathsize = 100;
@@ -361,10 +363,8 @@ struct 	Token{
 
 Token 	token_lookup (const char token){
 	int i;
-//	printf ("entering token checking: %c\n", token);
 	for (i=0; tokenTypes_lookup_table[i].token != '?'; i++){
 		if (token == tokenTypes_lookup_table[i].token){
-//			printf ("token found! %c", token);
 			return tokenTypes_lookup_table[i];
 		}
 	}
@@ -374,10 +374,7 @@ void 	tokenizeInput (char* &input, std::vector<char*>& arguments, const char* to
 	int START_POS = 0;
 	int END_POS = 0;
 
-//	printf("%s\n", input);
-
 	for (int i=0; i<strlen(input)+1; i++){
-//		printf("%d\n", i);
 		auto found = token_lookup(input[i]);
 		if (found.token != '?'){
 			END_POS = i;
@@ -385,7 +382,6 @@ void 	tokenizeInput (char* &input, std::vector<char*>& arguments, const char* to
 				char* arg = (char*)malloc( (END_POS-START_POS+1) * sizeof(char));
 				strncpy(arg, &input[START_POS], END_POS - START_POS);
 				arg[END_POS-START_POS] = '\0';
-//				printf("%s\n", arg);
 				if (strcmp(arg, " ") != 0) //prevents pre-spaces in command
 					arguments.push_back(arg);
 				if (found.isIncluded){
@@ -394,11 +390,8 @@ void 	tokenizeInput (char* &input, std::vector<char*>& arguments, const char* to
 					argt[1] = '\0';
 					arguments.push_back(argt);
 //					free (argt);  //cannot free because it would create a dangling pointer!
-//					i++;
 				}
 				i++;
-//				arguments[arguments.size() - 1] = arg;
-//				printf("pushed back %s\n", arg);
 				if (input[i]=='\0')
 					break;
 
@@ -412,7 +405,6 @@ void 	tokenizeInput (char* &input, std::vector<char*>& arguments, const char* to
 						argt[1] = '\0';
 						arguments.push_back(argt);
 	//					free (argt);  //cannot free because it would create a dangling pointer!
-	//					i++;
 					}
 					i++;
 				}while (foundc!='?');
@@ -428,100 +420,76 @@ void 	tokenizeInput (char* &input, std::vector<char*>& arguments, const char* to
 //	}
 	arguments.push_back(NULL);
 }
-char* 	trimWhitespace(char* &str){
-  char *end;
 
-  // Trim leading space
-  while(isspace((unsigned char)*str)){
-	  str++;
-//	  printf("hello")
-  }
+#define DEFAULT_STD_OUT 1
+#define DEFAULT_STD_IN 0
 
-  if(*str == 0)  // All spaces?
-    return str;
+struct Command {
+	std::vector<char*> arguments;
+	int output_fd;
+	int input_fd;
+	int flag;
 
-  // Trim trailing space
-  end = str + strlen(str) - 1;
-  while(end > str && isspace((unsigned char)*end)) end--;
-
-  // Write new null terminator character
-  end[1] = '\0';
-
-  return str;
-}
-int 	evalExpression(std::vector<char*>& arguments, std::vector<char*>&LHS, std::vector<char*>&RHS, int &START_POINT){
-//	EVAL_CODE = -1;
+	Command ():output_fd(DEFAULT_STD_OUT),  input_fd(DEFAULT_STD_IN), flag(NO_INPUT_FLAG){}
+//	Command (int ofd, int ifd, int flg=NO_INPUT_FLAG):output_fd(ofd),  input_fd(ifd), flag(flg){}
+};
 
 
+int 	evalExpression(std::vector<char*>& arguments, std::vector<Command>& commands){
 	int CURRENT_FLAG = -1;
 
-	LHS.clear();
-	RHS.clear();
-
-	int i=START_POINT;
-	bool alteredLHS = false;
-	for (; i<arguments.size()-1; i++){
-//		printf("In Eval Loop, i = %d\n", i);
+	for (int i=0; i<arguments.size()-1; i++){
 		if (strcmp(arguments[i], ">") == 0){
-//			for (; i<arguments.size(); i++){
-//				printf("In Eval Loop, assigning RHS, i = %d\n", i);
-//				printf("RHS = %s\n", arguments[i+1]);
-			if (RHS.empty()){
-				RHS.push_back(arguments[++i]);
-				RHS.push_back(NULL);
-			}
-			else{
-				RHS[0] = arguments[++i];
-			}
-				CURRENT_FLAG = STD_REDIR;
-//			}
-
+			int fd = open(arguments[++i], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+			commands.back().output_fd = fd;
+			commands.back().flag = STD_REDIR;
 		}
 		else if (strcmp(arguments[i], "<") == 0){
-			if (RHS.empty()){
-				RHS.push_back(NULL);
-				RHS.push_back(arguments[++i]);
-			}
-			else{
-				RHS[1] = arguments[++i];
-			}
+			int fd = open(arguments[++i], O_RDWR, S_IRUSR | S_IWUSR);
+			commands.back().input_fd = fd;
+			commands.back().flag = STD_REDIR;
+		}
+		else if (strcmp (arguments[i], "|") == 0){
+			int fd[2];
+			pipe (fd);
+			commands.back().output_fd = fd[1];
+			commands.back().arguments.push_back(NULL);
+			commands.back().flag = PIPE;
+
+			Command pushTo;
+			commands.push_back(pushTo);
+
+			commands.back().input_fd = fd[0];
+			commands.back().flag = PIPE_END;
+		}
+		else if (strcmp (arguments[i], "&") == 0 and i!=arguments.size()-2 and strcmp(arguments[i+1], "&") == 0){
+			commands.back().arguments.push_back(NULL);
+			Command pushTo;
+			commands.push_back(pushTo);
+			i++;
 		}
 		else{
-			LHS.push_back(arguments[i]);
-			alteredLHS = true;
+			if (commands.empty()){
+				Command pushTo;
+				commands.push_back(pushTo);
+			}
+			commands.back().arguments.push_back(arguments[i]);
 		}
+		CURRENT_FLAG = 0;
 	}
-	if (alteredLHS)
-		LHS.push_back(NULL);
-//	printf("Exited Loop, START_POINT = %d\n", START_POINT);
-	START_POINT = i;
 
-//	printf("STD_REDIR Flag is %d\n", STD_REDIR);
-//	printf("CURRENT Flag is %d\n", CURRENT_FLAG);
+	commands.back().arguments.push_back(NULL);
+
+// //	printing commands and their arguments
+//	for (int i=0; i<commands.size(); i++){
+//		printf("Command #%d: ", i);
+//		for (int j=0; j<commands[i].arguments.size()-1; j++){
+//			printf ("%s, ", commands[i].arguments[j]);
+//		}
+//		printf("\n");
+//	}
 
 	return CURRENT_FLAG;
-//	printf ("Start point in function is %d", START_POINT);
-//
-//	for (int i=0; i<arguments.size(); i++){
-//		if (token_lookup(arguments[i][0]) == " ") {}
-//	}
-
-
-//	if (strchr(input,'=') != nullptr){
-//		printf("Call to set an environment variable!\n");
-//		tokenizeInput(input, arguments, "=");
-//		int i;
-//		for (i=0; i<arguments.size()-1; i++){
-//			trimWhitespace (arguments[i]);
-//			printf("%s, ", arguments[i]);
-//		}
-//		EVAL_CODE = i;
-//		printf ("\b\b \n");
-//		return true;
-//	}
-//	else {
-//		return false;
-//	}
 }
 
 
@@ -529,6 +497,7 @@ int 	evalExpression(std::vector<char*>& arguments, std::vector<char*>&LHS, std::
 int 	understandInput(char* &input, std::vector<char*>& arguments){
 
 //	printf("%s\n", input);
+
 
     /* tokenize the input and place it into a vector of char* */
 	tokenizeInput(input, arguments, " ");
@@ -543,74 +512,53 @@ int 	understandInput(char* &input, std::vector<char*>& arguments){
 int 	implementInput(std::vector<char*> &arguments, int FLAG = NO_INPUT_FLAG){
 	int childPid = 0;
 
+	std::vector <pthread_t> daemonListeners;
+
 	/* before launching, we check if it is an expression or an environment variable definition */
-//	int BreakPoint;
+	/* a vector of commands */
+	std::vector<Command> commands;
 
-	/* left hand side is always writer, right hand side is reader */
-	std::vector<char*> LHS;
-	std::vector<char*> RHS;
+	int _EXPR = evalExpression(arguments, commands);
 
-	int START_POINT = 0;
-	int _EXPR = evalExpression(arguments, LHS, RHS, START_POINT);
-//	printf ("wtf, _EXPR = %d \n", _EXPR);
-
-	while (!LHS.empty()){
-
-	//	bool isAnExpression = ( _EXPR < 0 ? false : true);
+	for (int i=0; i<commands.size(); i++){
 
 		// checks if Daemon process or not (ampersand '&' in the end)
-		if (strcmp(LHS[LHS.size()-2], "&") == 0){
-	//		printf("arg is %s", arguments[arguments.size()-2]);
-			LHS.pop_back();
-			LHS.pop_back();
-			LHS.push_back(NULL);
-	//		printf("Is daemon\n");
+		if (strcmp(commands[i].arguments[commands[i].arguments.size()-2], "&") == 0){
+			commands[i].arguments.pop_back();
+			commands[i].arguments.pop_back();
+			commands[i].arguments.push_back(NULL);
 			FLAG = DAEMON;
 		}
 
-
-		char ** argv  = &LHS[0];
-
+		char ** argv  = &commands[i].arguments[0];
 
 
 		//checks if a builtin bash command
-		if (FLAG != DAEMON and RHS.empty() and lookup_and_call(argv, LHS.size())) {}
+		if (FLAG != DAEMON and commands[i].input_fd==DEFAULT_STD_IN and commands[i].output_fd==DEFAULT_STD_OUT and lookup_and_call(argv, commands[i].arguments.size())) {}
 		else if ((childPid = fork()) == 0){
 			setenv("parent", getenv("SHELL"), true);
 
-//			printf ("First I'm here\n");
-			//is an expression, so treat non commands as open
-			if (!RHS.empty()){
-//				printf ("Then I'm here\n");
-//				printf ("_EXPR = %d \n", _EXPR);
-				/* in the case of STD_REDIRECTION, LHS contains the COMMAND,
-				 * RHS[0] contains STD_OUT Filename
-				 * RHS[1] contains STD_IN Filename
-				 */
 
-				if (_EXPR == STD_REDIR){
-//					printf ("Finally, I'm here\n");
-					if (RHS[0]!=NULL){
-//						printf ("RHS is %s\n", RHS[0]);
-						int fd = open(RHS[0], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-						dup2(fd, 1);
-						close (fd);
-					}
-					if (RHS[1]!=NULL){
-						int fd = open(RHS[1], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-						dup2(fd, 0);
-						close (fd);
-					}
-				}
-				else if (_EXPR == PIPE){
+//			printf ("command is %s\n", commands[i].arguments[0]);
+//			printf ("input fd is %d, output fd is %d\n", commands[i].input_fd, commands[i].output_fd);
 
-				}
 
+			/* redirect I/O if the default input and output have been changed */
+			if (commands[i].input_fd!=DEFAULT_STD_IN){
+//				printf ("Second I'm here\n");
+				dup2(commands[i].input_fd, DEFAULT_STD_IN);
+//				close (3);
+//				close (4);
+			}
+			if (commands[i].output_fd!=DEFAULT_STD_OUT){
+//				printf ("First I'm here\n");
+				dup2(commands[i].output_fd, DEFAULT_STD_OUT);
+//				close (3);
+//				close (4);
 			}
 
-
 			//If it's a daemon, checks if a builtin bash command
-			if (lookup_and_call(argv, LHS.size())) {
+			if (lookup_and_call(argv, commands[i].arguments.size())) {
 				exit(0);
 			}
 
@@ -620,7 +568,7 @@ int 	implementInput(std::vector<char*> &arguments, int FLAG = NO_INPUT_FLAG){
 				//is a Virtual System command
 				std::string defpath = getenv("SHELL");
 				defpath += "/bin/";
-				std::string path = defpath + LHS[0];
+				std::string path = defpath + commands[i].arguments[0];
 				execv(path.c_str(), argv);
 
 
@@ -628,7 +576,8 @@ int 	implementInput(std::vector<char*> &arguments, int FLAG = NO_INPUT_FLAG){
 				char* allpaths = getenv("PATH");
 				path = strtok (allpaths,":");
 				while (path.c_str() != nullptr) {
-					path = path + "/" + LHS[0];
+					path = path + "/" + commands[i].arguments[0];
+//					printf("%s\n", path.c_str());
 					execv(path.c_str(), argv);
 					path = strtok(NULL, ":");
 					if (path == "\0")
@@ -637,14 +586,14 @@ int 	implementInput(std::vector<char*> &arguments, int FLAG = NO_INPUT_FLAG){
 	//			    printf("hello world");
 
 				//if both commands fail
-				printf("Command '%s' not found\n",LHS[0]);
+				printf("Command '%s' not found\n",commands[i].arguments[0]);
 	//				fflush(stdout); // Will now print everything in the stdout buffer
 			}
 			//is a file or directory
 			else{
-				std::string path = LHS[0];
+				std::string path = commands[i].arguments[0];
 				execv(path.c_str(), argv);
-				printf("mard: %s: No such file or directory\n", LHS[0]);
+				printf("mard: %s: No such file or directory\n", commands[i].arguments[0]);
 			}
 
 			//everything failed
@@ -652,13 +601,22 @@ int 	implementInput(std::vector<char*> &arguments, int FLAG = NO_INPUT_FLAG){
 		}
 		else{
 
-	//		printf("InpE.ThreadType is %d\n", InpE.THREAD_TYPE);
-			if (FLAG == DAEMON){
-				pthread_create(&currentDaemonListenerID, NULL, daemonListener, (void*)(intptr_t)childPid);
-			}
-			else
-				waitpid(childPid, NULL, 0);
 
+	//		printf("InpE.ThreadType is %d\n", InpE.THREAD_TYPE);
+			if (FLAG == DAEMON or commands[i].flag == PIPE){
+				if (commands[i].output_fd != DEFAULT_STD_OUT)
+					close (commands[i].output_fd);
+				daemonListeners.push_back(0);
+				int *argsToSend = (int*)malloc(2*sizeof(int));
+				argsToSend[0] = childPid;
+				argsToSend[1] = commands[i].flag;
+				pthread_create(&daemonListeners.back(), NULL, daemonListener, (void*)argsToSend);
+			}
+			else{
+				if (commands[i].input_fd != DEFAULT_STD_IN and commands[i].flag == PIPE_END)
+					close (commands[i].input_fd);
+				waitpid(childPid, NULL, 0);
+			}
 			// clear argument list in the meantime...
 	//		for (int i=0; i<arguments.size(); i++){
 	//			if (arguments[i])
@@ -673,7 +631,7 @@ int 	implementInput(std::vector<char*> &arguments, int FLAG = NO_INPUT_FLAG){
 		}
 
 //		printf ("Start point in expr loop is %d", START_POINT);
-		_EXPR = evalExpression(arguments, LHS, RHS, START_POINT);
+//		_EXPR = evalExpression(arguments, commands);
 	}
 }
 void 	inputLoop(){
@@ -759,7 +717,10 @@ void 	initializeTerminal(){
 	}
 	userName.pop_back();
 
-	printf("Welcome back to your %s (%s) system, %s.\n\n", systemInfo.sysname, systemInfo.machine, userName.c_str());
+	printf("Welcome back to your %s (%s) system", systemInfo.sysname, systemInfo.machine);
+	if (userName.c_str())
+		printf(", %s", userName.c_str());
+	printf("!\n\n");
 
 	printf("mard is a chad 3rd-party bash. It comes with command history, a virtual machine, and even built-in games.\n");
 	printf("Use 'system' before a Linux/UNIX system call to use the machine's default system calls.\n\n");
