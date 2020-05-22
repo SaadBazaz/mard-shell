@@ -2,3 +2,4 @@ Delay&
 ls | sed -e s/[aeio]/uWu/g
 Input < Inputter
 hello && play
+wc -m < wc-test.txt > wc-test.cnt
