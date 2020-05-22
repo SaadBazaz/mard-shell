@@ -13,3 +13,7 @@ Ask my instructors.
 - I/O redirection and pipes support (multiple supported)
 - Multicommand support using the AND ("&&") operator
 - Easily add new bash functions via the lookup table
+
+### How to run:
+1. make
+2. ./gbsh
