@@ -87,7 +87,8 @@ enum EXPRS {
 	DAEMON,
 	STD_REDIR,
 	PIPE,
-	PIPE_END
+	PIPE_END,
+	INTERNAL_COMMAND
 };
 
 
@@ -530,9 +531,10 @@ int 	implementInput(std::vector<Command>& commands, int FLAG = NO_INPUT_FLAG){
 
 	std::vector <pthread_t> daemonListeners;
 
+//	printf ("Flag is %d\n", FLAG);
+
 	for (int i=0; i<commands.size(); i++){
 
-		FLAG = NO_INPUT_FLAG;
 
 		// checks if Daemon process or not (ampersand '&' in the end)
 		if (strcmp(commands[i].arguments[commands[i].arguments.size()-2], "&") == 0){
@@ -594,7 +596,7 @@ int 	implementInput(std::vector<Command>& commands, int FLAG = NO_INPUT_FLAG){
 //					argv = &commands[i].arguments[j];
 //					for (int k=0; argv[k]; k++)
 //						printf (" { %s },\n ", argv[k]);
-//					printf (" { path = %s\n ", path.c_str());
+//					printf (" {{ path = %s }}\n", argpath.c_str());
 					execv(argpath.c_str(), argv);
 					nat_path = strtok(NULL, ":");
 //					printf ("%s\n", path.c_str());
@@ -612,8 +614,35 @@ int 	implementInput(std::vector<Command>& commands, int FLAG = NO_INPUT_FLAG){
 
 //				printf ("path is = %s\n", errPath.c_str());
 //				printf ("command is = %s\n", theCommand.c_str());
+				if (execl(errPath.c_str(), errPath.c_str(), theCommand.c_str(), (char*) NULL)<0){
+					printf("errorno = %d\n", errno);
 
-				execl(errPath.c_str(), errPath.c_str(), theCommand.c_str(), (char*) NULL);
+					if (errno == 13){ //Permissions error
+//						printf ("Flag is (again) %d\n", FLAG);
+//						printf ("INTERNAL COMMAND Flag is %d\n", INTERNAL_COMMAND);
+
+						if (FLAG == INTERNAL_COMMAND){
+							printf("Cannot release permissions for command-not-found. Please manually enter the command\n\nsudo chmod a+x usr/lib/command-not-found\n\nin this terminal or your official Bash terminal.\n\n");
+							exit(1);
+						}
+						else{
+							sleep(1);
+//							printf("I'm here now\n");
+							std::vector <Command> unlockPermissions;
+							Command unlocker;
+
+							unlocker.arguments.push_back((char*)"sudo");
+							unlocker.arguments.push_back((char*)"chmod");
+							unlocker.arguments.push_back((char*)"a+x");
+							unlocker.arguments.push_back((char*)"usr/lib/command-not-found");
+							unlocker.arguments.push_back(NULL);
+
+							unlockPermissions.push_back(unlocker);
+
+							implementInput (unlockPermissions, INTERNAL_COMMAND);
+						}
+					}
+				}
 			}
 			//is a file or directory
 			else{
@@ -677,6 +706,8 @@ int 	implementInput(std::vector<Command>& commands, int FLAG = NO_INPUT_FLAG){
 		}
 
 
+		/* Reset FLAG here (Might cause problems imo, should be replaced by command-specific flags) */
+		FLAG = NO_INPUT_FLAG;
 	}
 
 }
