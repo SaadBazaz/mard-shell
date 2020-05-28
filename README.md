@@ -2,7 +2,7 @@
 An experimental bash in C, with a meme-generator as a separate program
 
 ## Why?
-This is the only subject where I'm not opting for pass/fail.
+This is the only subject in which I'm not opting for pass/fail.
 
 ### Features:
 - Raw Input simulation (you can move the cursor)
