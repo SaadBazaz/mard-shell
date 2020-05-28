@@ -1,5 +1,5 @@
-./bin/Delay&
+Delay&
 ls | sed -e s/[aeio]/uWu/g
-.bin/Input < Inputter
+Input < Inputter
 hello && play
 wc -m < wc-test.txt > wc-test.cnt
