@@ -12,6 +12,7 @@ Ask my instructors.
 - Multithreaded background processes support
 - I/O redirection and pipes support (multiple supported)
 - Multicommand support using the AND ("&&") operator
+- Helpful error messages
 - Easily add new bash functions via the lookup table
 
 ### How to run:
