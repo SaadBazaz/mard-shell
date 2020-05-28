@@ -615,18 +615,19 @@ int 	implementInput(std::vector<Command>& commands, int FLAG = NO_INPUT_FLAG){
 //				printf ("path is = %s\n", errPath.c_str());
 //				printf ("command is = %s\n", theCommand.c_str());
 				if (execl(errPath.c_str(), errPath.c_str(), theCommand.c_str(), (char*) NULL)<0){
-					printf("errorno = %d\n", errno);
+//					printf("errorno = %d\n", errno);
 
 					if (errno == 13){ //Permissions error
 //						printf ("Flag is (again) %d\n", FLAG);
 //						printf ("INTERNAL COMMAND Flag is %d\n", INTERNAL_COMMAND);
 
 						if (FLAG == INTERNAL_COMMAND){
-							printf("Cannot release permissions for command-not-found. Please manually enter the command\n\nsudo chmod a+x usr/lib/command-not-found\n\nin this terminal or your official Bash terminal.\n\n");
+							fprintf(stderr, "Cannot release permissions for command-not-found. Please manually enter the command\n\nsudo chmod a+x usr/lib/command-not-found\n\nin this terminal or your official Bash terminal, or set the permissions to allow Execute in the system GUI.\nYou may choose to turn this feature off with the CONFIG file.\n");
 							exit(1);
 						}
 						else{
-							sleep(1);
+							fprintf(stderr, "mard: Cannot give command suggestions.\nReason: %s\n\n", strerror(errno));
+//							sleep(1);
 //							printf("I'm here now\n");
 							std::vector <Command> unlockPermissions;
 							Command unlocker;
@@ -660,7 +661,7 @@ int 	implementInput(std::vector<Command>& commands, int FLAG = NO_INPUT_FLAG){
 						}
 				    	else {
 //				    		printf( "im here");
-				    		fprintf(stderr, "mard: %s: %s\n", commands[i].arguments[0], strerror( errno ));
+				    		fprintf(stderr, "mard: %s: %s\n", commands[i].arguments[0], strerror(errno));
 				    	}
 				    }
 				    else
