@@ -18,3 +18,6 @@ This is the only subject where I'm not opting for pass/fail.
 ### How to run:
 1. make
 2. ./gbsh
+
+### Tested on:
+- Elementary OS: built on it, works as expected.
