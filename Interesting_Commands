@@ -2,4 +2,5 @@ Delay&
 ls | sed -e s/[aeio]/uWu/g
 Input < Inputter
 hello && play
+cat benedict_names.txt | sort | less > bandicoot_names.txt
 wc -m < wc-test.txt > wc-test.cnt
