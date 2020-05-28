@@ -25,6 +25,8 @@ const int KEY_RIGHT []= {27, 91, 67};
 
 
 
+/* Must toDo: Improve the structure of special key recognition, because many operations repeat */
+
 //struct {
 //	int values [3];
 //	int number_of_values;
@@ -52,9 +54,11 @@ std::list <std::string> CommandHistory;
 std::list <std::string>::iterator cmdhist_it = CommandHistory.begin();
 
 
-pthread_mutex_t lock;
+/* feeling cute, might use this later for multithreaded producer-consumer problems */
+//pthread_mutex_t lock;
 
 
+/* "I'll be back" - The Terminator */
 void sigintHandler(int sig_num){
     signal(SIGINT, sigintHandler);
     fflush(stdout);
@@ -74,14 +78,7 @@ char* HOST_NAME = (char *)malloc(hostnamesize * sizeof(char));
 
 struct utsname systemInfo;
 struct passwd * userInfo;
-/* end declaration */
 
-
-/* Include all builtin functions of mard */
-#include "./include/mrd_fn.h"
-
-
-/* ================ Assistive Terminal Functions START ================ */
 enum EXPRS {
 	NO_INPUT_FLAG,
 	DAEMON,
@@ -91,10 +88,20 @@ enum EXPRS {
 	INTERNAL_COMMAND
 };
 
+// Because I always forget
+#define DEFAULT_STD_OUT 1
+#define DEFAULT_STD_IN 0
 
-int childPid = 0;
+
+/* end declaration */
 
 
+/* Include all builtin functions of mard */
+#include "./include/mrd_fn.h"
+
+
+
+/* ================ Assistive Terminal Functions START ================ */
 void* 	daemonListener(void * args){
 //	printf("In the listener\n");
 	int * argv = (int *)args;
@@ -156,6 +163,8 @@ void 	setCWD(){
 	}
 
 }
+
+/* Smart, relaxing and useful input taker for complaint systems */
 void 	fancyInput (int &characters, char* &input, int &CURSOR_POS){
     int c; // used to capture the ASCII value of the input
 
@@ -343,6 +352,8 @@ void 	fancyInput (int &characters, char* &input, int &CURSOR_POS){
     }
 
 }
+
+/* Standard and easy input taker for non-complaint systems */
 void 	normalInput (int &characters, char* &input, unsigned long int &inputsize){
 		characters = getline(&input, &inputsize, stdin);
 		input[characters-1] = '\0';
@@ -414,16 +425,16 @@ void 	tokenizeInput (char* &input, std::vector<char*>& arguments, const char* to
 		}
 	}
 
+// ======== FOR VERBOSE DEBUGGING ======== //
 //	printf("Printing arguments\n");
 //	printf("%d\n", arguments.size());
 //	for (int i=0; i<arguments.size(); i++){
 //		printf("%d. %s\n", i, arguments[i]);
 //	}
+// ======== FOR VERBOSE DEBUGGING ======== //
+
 	arguments.push_back(NULL);
 }
-
-#define DEFAULT_STD_OUT 1
-#define DEFAULT_STD_IN 0
 
 struct Command {
 	std::vector<char*> arguments;
@@ -432,9 +443,8 @@ struct Command {
 	int flag;
 
 	Command ():output_fd(DEFAULT_STD_OUT),  input_fd(DEFAULT_STD_IN), flag(NO_INPUT_FLAG){}
-//	Command (int ofd, int ifd, int flg=NO_INPUT_FLAG):output_fd(ofd),  input_fd(ifd), flag(flg){}
+//	Command (int ofd, int ifd, int flg=NO_INPUT_FLAG):output_fd(ofd),  input_fd(ifd), flag(flg){}		// Ignore Parameterized constructor as it's not used
 };
-
 
 int 	evalExpression(std::vector<char*>& arguments, std::vector<Command>& commands){
 	int CURRENT_FLAG = -1;
@@ -481,6 +491,8 @@ int 	evalExpression(std::vector<char*>& arguments, std::vector<Command>& command
 
 	commands.back().arguments.push_back(NULL);
 
+
+// ======== FOR VERBOSE DEBUGGING ======== //
 // //	printing commands and their arguments
 //	for (int i=0; i<commands.size(); i++){
 //		printf("Command #%d: ", i);
@@ -489,12 +501,11 @@ int 	evalExpression(std::vector<char*>& arguments, std::vector<Command>& command
 //		}
 //		printf("\n");
 //	}
+// ======== FOR VERBOSE DEBUGGING ======== //
+
 
 	return CURRENT_FLAG;
 }
-
-
-
 int 	understandInput(char* &input, std::vector<Command>& commands){
 
 	std::vector<char*> arguments;
@@ -509,19 +520,11 @@ int 	understandInput(char* &input, std::vector<Command>& commands){
 	/* check if it is an expression or an environment variable definition */
 	int _EXPR = evalExpression(arguments, commands);
 
-	// clear argument list before moving forward...
-//	for (int i=0; i<arguments.size(); i++){
-//		if (arguments[i])
-//			free (arguments[i]);
-//	}
-//	for (int i=0; i<arguments.size(); i++){
-//		arguments.pop_back();
-//	}
-
 	return _EXPR;
 
 }
 
+/* standard function macro which just redirects the program's I/O to the command's I/O */
 #define REDIR_IO() 					 													 	\
   if (commands[i].input_fd!=DEFAULT_STD_IN) dup2(commands[i].input_fd, DEFAULT_STD_IN); 	\
   if (commands[i].output_fd!=DEFAULT_STD_OUT) dup2(commands[i].output_fd, DEFAULT_STD_OUT);
@@ -530,8 +533,6 @@ int 	implementInput(std::vector<Command>& commands, int FLAG = NO_INPUT_FLAG){
 	int childPid = 0;
 
 	std::vector <pthread_t> daemonListeners;
-
-//	printf ("Flag is %d\n", FLAG);
 
 	for (int i=0; i<commands.size(); i++){
 
@@ -546,11 +547,9 @@ int 	implementInput(std::vector<Command>& commands, int FLAG = NO_INPUT_FLAG){
 
 		char ** argv  = &commands[i].arguments[0];
 
+		// saves the original terminal I/O FDs in case they're lost
 		int saved_stdout = dup(DEFAULT_STD_OUT);
 		int saved_stdin = dup(DEFAULT_STD_IN);
-
-//		printf("s_stdout = %d, s_stdin = %d\n", saved_stdout, saved_stdin);
-
 
 		int index;
 		/* checks if a builtin bash command (normal and non-Daemon - results in faster execution) */
@@ -586,24 +585,18 @@ int 	implementInput(std::vector<Command>& commands, int FLAG = NO_INPUT_FLAG){
 				//is a Native System command
 				char* allpaths = getenv("PATH");
 				char* nat_path = strtok (allpaths,":");
-//				printf ("%s\n", path.c_str());
 				std::string theCommand = commands[i].arguments[0];
 				while (nat_path != NULL) {
 					std::string argpath = nat_path;
 					argpath += "/";
 					argpath += theCommand;
 					commands[i].arguments[0] = &argpath[0];
-//					argv = &commands[i].arguments[j];
-//					for (int k=0; argv[k]; k++)
-//						printf (" { %s },\n ", argv[k]);
-//					printf (" {{ path = %s }}\n", argpath.c_str());
 					execv(argpath.c_str(), argv);
 					nat_path = strtok(NULL, ":");
-//					printf ("%s\n", path.c_str());
-//					if (path.c_str() == nullptr){break;}
 				}
 
-//				fflush(stdout); // Will now print everything in the stdout buffer
+
+
 				//if both commands fail
 
 //				if (COMMAND_NOT_FOUND_PY)
@@ -612,14 +605,9 @@ int 	implementInput(std::vector<Command>& commands, int FLAG = NO_INPUT_FLAG){
 				std::string errPath = getenv("SHELL");
 				errPath += "/usr/lib/command-not-found";
 
-//				printf ("path is = %s\n", errPath.c_str());
-//				printf ("command is = %s\n", theCommand.c_str());
 				if (execl(errPath.c_str(), errPath.c_str(), theCommand.c_str(), (char*) NULL)<0){
-//					printf("errorno = %d\n", errno);
 
 					if (errno == 13){ //Permissions error
-//						printf ("Flag is (again) %d\n", FLAG);
-//						printf ("INTERNAL COMMAND Flag is %d\n", INTERNAL_COMMAND);
 
 						if (FLAG == INTERNAL_COMMAND){
 							fprintf(stderr, "Cannot release permissions for command-not-found. Please manually enter the command\n\nsudo chmod a+x usr/lib/command-not-found\n\nin this terminal or your official Bash terminal, or set the permissions to allow Execute in the system GUI.\nYou may choose to turn this feature off with the CONFIG file.\n");
@@ -627,8 +615,6 @@ int 	implementInput(std::vector<Command>& commands, int FLAG = NO_INPUT_FLAG){
 						}
 						else{
 							fprintf(stderr, "mard: Cannot give command suggestions.\nReason: %s\n\n", strerror(errno));
-//							sleep(1);
-//							printf("I'm here now\n");
 							std::vector <Command> unlockPermissions;
 							Command unlocker;
 
@@ -648,19 +634,16 @@ int 	implementInput(std::vector<Command>& commands, int FLAG = NO_INPUT_FLAG){
 			//is a file or directory
 			else{
 				const char* path = commands[i].arguments[0];
-//				argv = &commands[i].arguments[1];
 //				for (int k=0; argv[k]; k++)
 //					printf (" { %s },\n ", argv[k]);
 //				printf (" { path = %s\n ", path.c_str());
 				if (execv(path, argv)<0){
-//					const char * dog="./bin";
 				    struct stat path_stat;
 				    if (stat(path, &path_stat)>=0){
 				    	if (S_ISDIR(path_stat.st_mode)){
 							printf("mard: %s: Is a directory\n", commands[i].arguments[0]);
 						}
 				    	else {
-//				    		printf( "im here");
 				    		fprintf(stderr, "mard: %s: %s\n", commands[i].arguments[0], strerror(errno));
 				    	}
 				    }
