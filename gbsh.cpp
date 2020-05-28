@@ -552,7 +552,7 @@ int 	implementInput(std::vector<Command>& commands, int FLAG = NO_INPUT_FLAG){
 
 		int index;
 		/* checks if a builtin bash command (normal and non-Daemon - results in faster execution) */
-		if (FLAG != DAEMON and ((index = lookup_function(argv[0])) >= 0)) {
+		if (FLAG != DAEMON and commands[i].flag != PIPE and commands[i].flag != PIPE_END and ((index = lookup_function(argv[0])) >= 0)) {
 			/* redirects I/O if the default input and output have been changed */
 			REDIR_IO();
 
