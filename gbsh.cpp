@@ -494,33 +494,45 @@ int 	evalExpression(std::vector<char*>& arguments, std::vector<Command>& command
 
 
 
-int 	understandInput(char* &input, std::vector<char*>& arguments){
+int 	understandInput(char* &input, std::vector<Command>& commands){
 
-//	printf("%s\n", input);
-
+	std::vector<char*> arguments;
 
     /* tokenize the input and place it into a vector of char* */
 	tokenizeInput(input, arguments, " ");
 
-	if (arguments[0] == NULL){
+	if (arguments[0] == NULL or arguments.empty()){
 		return -1;
 	}
 
-	return NO_INPUT_FLAG;
+	/* check if it is an expression or an environment variable definition */
+	int _EXPR = evalExpression(arguments, commands);
+
+	// clear argument list before moving forward...
+//	for (int i=0; i<arguments.size(); i++){
+//		if (arguments[i])
+//			free (arguments[i]);
+//	}
+//	for (int i=0; i<arguments.size(); i++){
+//		arguments.pop_back();
+//	}
+
+	return _EXPR;
 
 }
-int 	implementInput(std::vector<char*> &arguments, int FLAG = NO_INPUT_FLAG){
+
+#define REDIR_IO() 					 													 	\
+  if (commands[i].input_fd!=DEFAULT_STD_IN) dup2(commands[i].input_fd, DEFAULT_STD_IN); 	\
+  if (commands[i].output_fd!=DEFAULT_STD_OUT) dup2(commands[i].output_fd, DEFAULT_STD_OUT);
+
+int 	implementInput(std::vector<Command>& commands, int FLAG = NO_INPUT_FLAG){
 	int childPid = 0;
 
 	std::vector <pthread_t> daemonListeners;
 
-	/* before launching, we check if it is an expression or an environment variable definition */
-	/* a vector of commands */
-	std::vector<Command> commands;
-
-	int _EXPR = evalExpression(arguments, commands);
-
 	for (int i=0; i<commands.size(); i++){
+
+		FLAG = NO_INPUT_FLAG;
 
 		// checks if Daemon process or not (ampersand '&' in the end)
 		if (strcmp(commands[i].arguments[commands[i].arguments.size()-2], "&") == 0){
@@ -532,29 +544,36 @@ int 	implementInput(std::vector<char*> &arguments, int FLAG = NO_INPUT_FLAG){
 
 		char ** argv  = &commands[i].arguments[0];
 
+		int saved_stdout = dup(DEFAULT_STD_OUT);
+		int saved_stdin = dup(DEFAULT_STD_IN);
 
+//		printf("s_stdout = %d, s_stdin = %d\n", saved_stdout, saved_stdin);
+
+
+		int index;
 		/* checks if a builtin bash command (normal and non-Daemon - results in faster execution) */
-		if (FLAG != DAEMON and commands[i].input_fd==DEFAULT_STD_IN and commands[i].output_fd==DEFAULT_STD_OUT and lookup_and_call(argv, commands[i].arguments.size())) {}
+		if (FLAG != DAEMON and ((index = lookup_function(argv[0])) >= 0)) {
+			/* redirects I/O if the default input and output have been changed */
+			REDIR_IO();
+
+			/* call supercedes I/O redirection */
+			call(index, argv, commands[i].arguments.size());
+		}
 		else if ((childPid = fork()) == 0){
-			setenv("parent", getenv("SHELL"), true);
+			setenv("PARENT", getenv("SHELL"), true);
 
 
 			/* redirects I/O if the default input and output have been changed */
-			if (commands[i].input_fd!=DEFAULT_STD_IN){
-				dup2(commands[i].input_fd, DEFAULT_STD_IN);
-			}
-			if (commands[i].output_fd!=DEFAULT_STD_OUT){
-				dup2(commands[i].output_fd, DEFAULT_STD_OUT);
-			}
+			REDIR_IO();
 
-			/* If it's a daemon, checks if a builtin bash command */
-			if (lookup_and_call(argv, commands[i].arguments.size())) {
+			/* If it's a daemon, checks if a builtin bash command and immediately call if true*/
+			if (call(lookup_function(argv[0]), argv, commands[i].arguments.size())) {
 				exit(0);
 			}
 
 
 			//is a system command
-			if (strchr(arguments[0],'/') == nullptr){
+			if (strchr(commands[i].arguments[0],'/') == nullptr){
 				//is a Virtual System command
 				std::string defpath = getenv("SHELL");
 				defpath += "/bin/";
@@ -564,31 +583,70 @@ int 	implementInput(std::vector<char*> &arguments, int FLAG = NO_INPUT_FLAG){
 
 				//is a Native System command
 				char* allpaths = getenv("PATH");
-				path = strtok (allpaths,":");
-				while (path.c_str() != nullptr) {
-					path = path + "/" + commands[i].arguments[0];
-					execv(path.c_str(), argv);
-					path = strtok(NULL, ":");
-					if (path == ""){}
-					else
-						break;
+				char* nat_path = strtok (allpaths,":");
+//				printf ("%s\n", path.c_str());
+				std::string theCommand = commands[i].arguments[0];
+				while (nat_path != NULL) {
+					std::string argpath = nat_path;
+					argpath += "/";
+					argpath += theCommand;
+					commands[i].arguments[0] = &argpath[0];
+//					argv = &commands[i].arguments[j];
+//					for (int k=0; argv[k]; k++)
+//						printf (" { %s },\n ", argv[k]);
+//					printf (" { path = %s\n ", path.c_str());
+					execv(argpath.c_str(), argv);
+					nat_path = strtok(NULL, ":");
+//					printf ("%s\n", path.c_str());
+//					if (path.c_str() == nullptr){break;}
 				}
 
-				fflush(stdout); // Will now print everything in the stdout buffer
+//				fflush(stdout); // Will now print everything in the stdout buffer
 				//if both commands fail
-				printf("Command '%s' not found\n",commands[i].arguments[0]);
+
+//				if (COMMAND_NOT_FOUND_PY)
+//				fprintf(stderr, "Command '%s' not found\n", theCommand.c_str());
+
+				std::string errPath = getenv("SHELL");
+				errPath += "/usr/lib/command-not-found";
+
+//				printf ("path is = %s\n", errPath.c_str());
+//				printf ("command is = %s\n", theCommand.c_str());
+
+				execl(errPath.c_str(), errPath.c_str(), theCommand.c_str(), (char*) NULL);
 			}
 			//is a file or directory
 			else{
-				std::string path = commands[i].arguments[0];
-				execv(path.c_str(), argv);
-				printf("mard: %s: No such file or directory\n", commands[i].arguments[0]);
+				const char* path = commands[i].arguments[0];
+//				argv = &commands[i].arguments[1];
+//				for (int k=0; argv[k]; k++)
+//					printf (" { %s },\n ", argv[k]);
+//				printf (" { path = %s\n ", path.c_str());
+				if (execv(path, argv)<0){
+//					const char * dog="./bin";
+				    struct stat path_stat;
+				    if (stat(path, &path_stat)>=0){
+				    	if (S_ISDIR(path_stat.st_mode)){
+							printf("mard: %s: Is a directory\n", commands[i].arguments[0]);
+						}
+				    	else {
+//				    		printf( "im here");
+				    		fprintf(stderr, "mard: %s: %s\n", commands[i].arguments[0], strerror( errno ));
+				    	}
+				    }
+				    else
+						fprintf(stderr, "mard: %s: %s\n", commands[i].arguments[0], strerror( errno ));
+				}
+
+
 			}
 
 			//everything failed
 			exit(1);
 		}
 		else{
+
+
 			if (FLAG == DAEMON or commands[i].flag == PIPE){
 				if (commands[i].output_fd != DEFAULT_STD_OUT)
 					close (commands[i].output_fd);
@@ -604,30 +662,37 @@ int 	implementInput(std::vector<char*> &arguments, int FLAG = NO_INPUT_FLAG){
 				waitpid(childPid, NULL, 0);
 			}
 		}
-	}
-	// clear argument list after the loop ends and all commands have been executed...
-	for (int i=0; i<arguments.size(); i++){
-		if (arguments[i])
-			free (arguments[i]);
-	}
-	for (int i=0; i<arguments.size(); i++){
-		arguments.pop_back();
+
+		/* restore terminal I/O if changed */
+		if (dup(DEFAULT_STD_OUT) != saved_stdout){
+			/* Restore stdout */
+			dup2(saved_stdout, DEFAULT_STD_OUT);
+			close(saved_stdout);
+		}
+
+		if (dup(DEFAULT_STD_IN) != saved_stdin){
+			/* Restore stdin */
+			dup2(saved_stdin, DEFAULT_STD_IN);
+			close(saved_stdin);
+		}
+
+
 	}
 
 }
 void 	inputLoop(){
 	char * input;
 	size_t inputsize = 100;
-    input = (char *)malloc(inputsize * sizeof(char));
     int CURSOR_POS = 0;
+
+    Color::Modifier green(Color::FG_GREEN);
+    Color::Modifier def(Color::FG_DEFAULT);
+    Color::Modifier blue(Color::FG_BLUE);
 
     /* Runs forever ;) */
     for ever {
-	    Color::Modifier green(Color::FG_GREEN);
-	    Color::Modifier def(Color::FG_DEFAULT);
-	    Color::Modifier blue(Color::FG_BLUE);
 	    setCWD();
-	    printf("%s%s@%s%s:%s%s%s > ", green.getColor().c_str(), userInfo->pw_name, HOST_NAME, def.getColor().c_str(), blue.getColor().c_str(), CURRENT_PATH_RELATIVE, def.getColor().c_str());
+	    printf("\033[1m%s%s@%s%s:%s%s%s\033[0m > ", green.getColor().c_str(), userInfo->pw_name, HOST_NAME, def.getColor().c_str(), blue.getColor().c_str(), CURRENT_PATH_RELATIVE, def.getColor().c_str());
 
 	    /* contains the number of characters read by stdin
 	     * in both normalInput and fancyInput
@@ -637,6 +702,9 @@ void 	inputLoop(){
 	    /* flush buffer to prevent leftover input from programs disturbing the terminal input */
 	    fflush(stdin);
 
+
+	    input = (char *)malloc(inputsize * sizeof(char));
+
 	    #ifdef linux
 	    /* For Linux systems only, right now */
 	    fancyInput(characters, input, CURSOR_POS);
@@ -645,22 +713,31 @@ void 	inputLoop(){
 	    normalInput(characters, input, inputsize);
 		#endif
 
+		std::vector <Command> commands;
 
-		std::vector <char *> arguments;
-
-		auto didItUnderstand = understandInput (input, arguments);
+		auto didItUnderstand = understandInput (input, commands);
 		if (didItUnderstand < 0)
 			continue;
 
-
 		/* causes segfaults and double free or corruption (fasttop) */
 		// clear input...
-//		if (input){
-//			free (input);
-////			input = nullptr;
-//		}
+		if (input){
+			free (input);
+			input = nullptr;
+		}
 
-		implementInput (arguments, didItUnderstand);
+//		 //	printing commands and their arguments
+//			for (int i=0; i<commands.size(); i++){
+//				printf("Command #%d: ", i);
+//				for (int j=0; j<commands[i].arguments.size()-1; j++){
+//					printf ("%s, ", commands[i].arguments[j]);
+//				}
+//				printf("\n");
+//			}
+
+		implementInput (commands, didItUnderstand);
+
+
     }
 }
 void 	initializeTerminal(){
@@ -706,7 +783,7 @@ void 	initializeTerminal(){
 	printf("mard is a chad 3rd-party bash. It comes with command history, a virtual machine, and even built-in games.\n");
 	printf("Use 'system' before a Linux/UNIX system call to use the machine's default system calls.\n\n");
 
-	printf("The default path is: %s\n", getenv("SHELL"));
+	printf("The SHELL default path is: %s\n", getenv("SHELL"));
 
 	printf("Env PATH variable is: %s\n\n", getenv("PATH"));
 

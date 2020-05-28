@@ -247,7 +247,7 @@ void* getEnvironment (void* args, int argc){
 
 void* getAllEnvironment (void* args, int argc){
 	for (int i=0; environ[i]!=NULL; i++){
-		printf("%d. %s\n", i+1, environ[i]);
+		printf("%d.\t%s\n", i+1, environ[i]);
 	}
 
 }

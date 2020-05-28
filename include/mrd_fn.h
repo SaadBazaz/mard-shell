@@ -56,14 +56,19 @@ struct {
 	  { NULL,    					NULL		}
   };
 
-
-bool lookup_and_call( char** arguments, int argument_count ){
+int lookup_function( char* theKey){
 	for (int i = 0; builtin_function_lookup_table[ i ].fn; i++)
-    if (strcmp(builtin_function_lookup_table[ i ].key, arguments[0]) == 0){
-      (*(builtin_function_lookup_table[ i ].fn))(arguments, argument_count-1); //-1 because we are excluding the NULL at the end
-      return true;
+    if (strcmp(builtin_function_lookup_table[ i ].key, theKey) == 0){
+      return i;
      }
-  return false;
+  return -1;
+}
+
+bool call (int index, char** arguments, int argument_count){
+	if (index < 0)
+		return false;
+    (*(builtin_function_lookup_table[index].fn))(arguments, argument_count-1); //-1 because we are excluding the NULL at the end
+    return true;
 }
 
 #include "./mrd_fn.cpp"
