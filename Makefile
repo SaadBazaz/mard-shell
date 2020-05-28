@@ -2,12 +2,9 @@
 
 CC = g++
 CFLAGS  = -pthread -Wall -g
-OBJ = gbsh.o
 
-all: gbsh
+objects = gbsh ./bin/system ./bin/kill ./bin/Delay ./bin/Input
+all: $(objects)
 
-gbsh: $(OBJ)
-	$(CC) $(CFLAGS) -o gbsh $(OBJ)
-
-%.o: %.c
-	$(CC) $(CFLAGS) -c $<
+$(objects): %: %.cpp
+	$(CC) $(CFLAGS) -o $@ $<
