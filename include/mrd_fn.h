@@ -42,18 +42,18 @@ struct {
 } builtin_function_lookup_table[] =
   {
 	  { &changeDirectory,   		"cd"		},
-	  { &clearScreen, 				"clear"		},
+	  { &clearScreen, 			"clear"		},
 	  { &getAllEnvironment, 		"environ"	},
-	  { &exitBash, 					"exit"		},
+	  { &exitBash, 				"exit"		},
 	  { &getEnvironment, 			"getenv"	},
-	  { &hello, 					"hello"		},
-	  { &bashHelp, 					"help"		},
+	  { &hello, 				"hello"		},
+	  { &bashHelp, 				"help"		},
 	  { &listDirectory, 			"ls"		},
-	  { &runGame, 					"play"		},
-	  { &printWorkingDirectory, 	"pwd"		},
+	  { &runGame, 				"play"		},
+	  { &printWorkingDirectory, 		"pwd"		},
 	  { &setEnvironment, 			"setenv"	},
 	  { &unsetEnvironment, 			"unsetenv"	},
-	  { NULL,    					NULL		}
+	  { NULL,    				NULL		}
   };
 
 int lookup_function( char* theKey){
