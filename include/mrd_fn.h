@@ -23,18 +23,18 @@
 #include <errno.h>
 
 
-void* changeDirectory		(void*, int);
+void* changeDirectory			(void*, int);
 void* hello 				(void*, int);
 void* bashHelp 				(void*, int);
 void* exitBash 				(void*, int);
-void* printWorkingDirectory (void*, int);
+void* printWorkingDirectory 		(void*, int);
 void* clearScreen 			(void*, int);
-void* listDirectory 		(void*, int);
+void* listDirectory 			(void*, int);
 void* runGame 				(void*, int);
-void* setEnvironment 		(void*, int);
-void* unsetEnvironment 		(void*, int);
-void* getEnvironment 		(void*, int);
-void* getAllEnvironment 	(void*, int);
+void* setEnvironment	 		(void*, int);
+void* unsetEnvironment 			(void*, int);
+void* getEnvironment 			(void*, int);
+void* getAllEnvironment 		(void*, int);
 
 struct {
   void* (*fn)(void*, int);
